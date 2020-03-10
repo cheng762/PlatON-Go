@@ -300,6 +300,10 @@ func recoverSnapshotDB(blockChainCache *core.BlockChainCache, genesis *core.Gene
 	if ch < blockChanHegiht {
 		for i := ch + 1; i <= blockChanHegiht; i++ {
 			block, parentBlock := blockChainCache.GetBlockByNumber(i), blockChainCache.GetBlockByNumber(i-1)
+			if block == nil {
+				log.Warn("snapshotdb recover block from blockchain:current block  is empty", "num", parentBlock.Number(), "hash", parentBlock.Hash(), "scurrent", sdb.GetCurrent().GetHighest(false))
+				break
+			}
 			log.Debug("snapshotdb recover block from blockchain", "num", block.Number(), "hash", block.Hash())
 			if block.Number().Uint64() == 1 {
 				genesis.ToBlock(ethdb.NewMemDatabase(), sdb)
