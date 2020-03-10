@@ -268,7 +268,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			gov.RegisterGovernParamVerifiers()
 		}
 
-		if err := recoverSnapshotDB(blockChainCache); err != nil {
+		if err := recoverSnapshotDB(blockChainCache, config.Genesis); err != nil {
 			log.Error("recover SnapshotDB fail", "error", err)
 			return nil, errors.New("Failed to recover SnapshotDB")
 		}
@@ -293,7 +293,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func recoverSnapshotDB(blockChainCache *core.BlockChainCache) error {
+func recoverSnapshotDB(blockChainCache *core.BlockChainCache, genesis *core.Genesis) error {
 	sdb := snapshotdb.Instance()
 	ch := sdb.GetCurrent().GetHighest(false).Num.Uint64()
 	blockChanHegiht := blockChainCache.CurrentHeader().Number.Uint64()
@@ -301,6 +301,9 @@ func recoverSnapshotDB(blockChainCache *core.BlockChainCache) error {
 		for i := ch + 1; i <= blockChanHegiht; i++ {
 			block, parentBlock := blockChainCache.GetBlockByNumber(i), blockChainCache.GetBlockByNumber(i-1)
 			log.Debug("snapshotdb recover block from blockchain", "num", block.Number(), "hash", block.Hash())
+			if block.Number().Uint64() == 1 {
+				genesis.ToBlock(ethdb.NewMemDatabase(), sdb)
+			}
 			if err := blockChainCache.Execute(block, parentBlock); err != nil {
 				log.Error("snapshotdb recover block from blockchain  execute fail", "error", err)
 				return err
