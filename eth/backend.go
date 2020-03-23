@@ -109,8 +109,8 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
-func (s *Ethereum) MakeTractions() {
-	err := s.txPool.MakeTransaction()
+func (s *Ethereum) MakeTractions(prikey string, chainid int64) {
+	err := s.txPool.MakeTransaction(prikey, chainid)
 	if err != nil {
 		panic(err)
 	}

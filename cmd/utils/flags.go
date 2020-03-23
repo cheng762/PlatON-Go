@@ -186,8 +186,12 @@ var (
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
 	TxPoolMakeTraction = cli.BoolFlag{
-		Name:  "txpool.MakeTraction",
+		Name:  "txpool.maketraction",
 		Usage: "make a lot traction",
+	}
+	TxPoolMakeTractionAccount = cli.StringFlag{
+		Name:  "txpool.maketractionaccount",
+		Usage: "the pri key use to make traction",
 	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
