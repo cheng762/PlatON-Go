@@ -1007,16 +1007,16 @@ func generateAccount(size int) []*PriAccount {
 	return addrs
 }
 
-func (pool *TxPool) MakeTransaction() error {
+func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 	time.Sleep(10 * time.Second)
-	pri, err := crypto.HexToECDSA("74f75a6f17adea015381458a722a8c34ac9e488b849b39a87af985e01279e077")
+	pri, err := crypto.HexToECDSA(prikey)
 	if err != nil {
 		return fmt.Errorf("hex to ecdsa fail:%v", err)
 	}
-	singine := types.NewEIP155Signer(new(big.Int).SetInt64(102))
+	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
 
 	accountsize := 10000
-	log.Debug("MakeTransaction begin prepare account", "account size", accountsize)
+	log.Debug("MakeTransaction begin prepare account", "account size", accountsize, "chainID", chainid, "key", prikey)
 	accounts := generateAccount(accountsize)
 	amountEach, _ := new(big.Int).SetString("100000000000000000000", 10)
 	gasPrice := new(big.Int).SetInt64(10000)
@@ -1034,9 +1034,13 @@ func (pool *TxPool) MakeTransaction() error {
 	}
 	log.Debug("MakeTransaction begin prepare account finish")
 
-	time.Sleep(120 * time.Second)
+	for {
+		if len(pool.pending) == 0 {
+			break
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
 
-	//	add := common.HexToAddress("0x021875a46201a572fa092e88fab46b8be6a88a13")
 	amount := new(big.Int).SetInt64(1)
 
 	txsCh := make(chan []*types.Transaction, 1)
@@ -1058,10 +1062,6 @@ func (pool *TxPool) MakeTransaction() error {
 						a = make([]*types.Transaction, 0)
 						time.Sleep(time.Millisecond * 50)
 					}
-					//err := pool.addTx(tx, false)
-					//if err != nil {
-					//	log.Crit("addTxLocked fail", "err", err)
-					//}
 				}
 				if len(a) > 0 {
 					pool.addTxs(a, true)
