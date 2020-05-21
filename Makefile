@@ -13,9 +13,8 @@ GO ?= latest
 GORUN = env GO111MODULE=on go run
 
 platon:
-	@echo "Runb \"$(GOPATH)/platon\" to "
+	@go env
 	build/build_deps.sh
-	@echo "Runa \"$(GOPATH)/platon\" to "
 	$(GORUN) build/ci.go install ./cmd/platon
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/platon\" to launch platon."
