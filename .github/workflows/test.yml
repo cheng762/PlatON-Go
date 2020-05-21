@@ -23,10 +23,10 @@ jobs:
       uses: actions/checkout@v2
 
     - name: test
-      run: echo $GOPATH
+      run: go env
 
     - name: Build
-      run: make all
+      run: make platon
 
     - name: Test
       run: go test -tags=test -v .
