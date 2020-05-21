@@ -14,6 +14,7 @@ GORUN = env GO111MODULE=on go run
 
 platon:
 	build/build_deps.sh
+	@echo "Runa \"$(GOPATH)/platon\" to "
 	$(GORUN) build/ci.go install ./cmd/platon
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/platon\" to launch platon."
