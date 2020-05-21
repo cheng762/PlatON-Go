@@ -22,7 +22,8 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
-   
+    - name: test
+      run: echo $GOPATH
 
     - name: Build
       run: make all
