@@ -10,12 +10,11 @@
 
 GOBIN = $(shell pwd)/build/bin
 GO ?= latest
-GORUN = env GO111MODULE=on go run
+Gg = $(shell go env GOPATH)
+GORUN = env GO111MODULE=on GOPATH=$(Gg) go run
 
 platon:
-	@go env
 	build/build_deps.sh
-	@go env
 	$(GORUN) build/ci.go install ./cmd/platon
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/platon\" to launch platon."
