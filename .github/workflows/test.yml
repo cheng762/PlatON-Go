@@ -37,7 +37,7 @@ jobs:
       run: make platon
 
     - name: Test
-      run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256`
+      run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256|grep -b mobile`
       
     - name: Run golangci-lint
       uses: actions-contrib/golangci-lint@v1
