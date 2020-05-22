@@ -45,9 +45,14 @@ jobs:
     
     - name: golangci-lint
       uses: reviewdog/action-golangci-lint@v1
+      env:                                                                    
+          GOROOT: "/usr/local/go"  
+      with:
+        github_token: ${{ secrets.github_token }}
+
     
-    - name: Test
-      run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256|grep -v mobile`
+  #  - name: Test
+  #    run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256|grep -v mobile`
       
     
 
