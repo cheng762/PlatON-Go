@@ -35,13 +35,17 @@ jobs:
 
     
     
-    - name: Build
-      run: make platon
+   # - name: Build
+   #   run: make platon
 
+    #- name: golangci-lint
+     # run: |
+     #   go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.27.0
+     #   golangci-lint run --no-config  --issues-exit-code=0 --timeout=30m --tests=false --skip-dirs="tests" --skip-dirs-use-default="true" --disable-all --enable=govet  --enable=misspell --enable=goconst --enable=gofmt --enable=goimports  --enable=gosec  --enable=unconvert  --enable=unparam  --enable=funlen 
+    
     - name: golangci-lint
-      run: |
-        go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.27.0
-        golangci-lint run --no-config  --issues-exit-code=0 --timeout=30m --tests=false --skip-dirs="tests" --skip-dirs-use-default="true" --disable-all --enable=govet  --enable=misspell --enable=goconst --enable=gofmt --enable=goimports  --enable=gosec  --enable=unconvert  --enable=unparam  --enable=funlen 
+      uses: reviewdog/action-golangci-lint@v1
+    
     - name: Test
       run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256|grep -v mobile`
       
