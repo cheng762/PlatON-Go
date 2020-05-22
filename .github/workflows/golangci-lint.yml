@@ -12,8 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name:make
+        
+      - name: make
         run: bash ./build/build_deps.sh
+        
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v1
         with:
