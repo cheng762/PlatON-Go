@@ -35,8 +35,8 @@ jobs:
 
     
     
-   # - name: Build
-   #   run: make platon
+    - name: Build
+      run: make platon
 
     #- name: golangci-lint
      # run: |
