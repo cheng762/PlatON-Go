@@ -26,8 +26,21 @@ jobs:
       run: |
         go get -v -t -d ./...
 
+    - uses: actions/cache@v1
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
     - name: Build
       run: make platon
 
     - name: Test
-      run: go test -tags=test `go list ./... | grep -v swarm|grep -v tests|grep -v bn256|grep -v mobile`
+      run: go test -tags=test -covermode=count -coverprofile=coverage.out  `go list ./...|grep -v life|grep -v swarm|grep -v tests|grep -v bn256`
+      
+    - name: Run golangci-lint
+      uses: actions-contrib/golangci-lint@v1
+      with:
+        args: --no-config  --issues-exit-code=0 --timeout=30m --tests=false --skip-dirs="tests" --skip-dirs-use-default="true" --disable-all --enable=govet  --enable=misspell --enable=goconst --enable=gofmt --enable=goimports  --enable=gosec  --enable=unconvert  --enable=unparam  --enable=funlen
+
