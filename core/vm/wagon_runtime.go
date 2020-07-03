@@ -1226,8 +1226,10 @@ func MigrateContract(proc *exec.Process, newAddr, args, argsLen, val, valLen, ca
 
 	// check call depth
 	if ctx.evm.depth > int(params.CallCreateDepth) {
-		return -1
+		panic(ErrDepth)
 	}
+
+	oldContract := ctx.contract.Address()
 
 	input := make([]byte, argsLen)
 	_, err := proc.ReadAt(input, int64(args))
@@ -1236,7 +1238,7 @@ func MigrateContract(proc *exec.Process, newAddr, args, argsLen, val, valLen, ca
 	}
 
 	if len(input) == 0 {
-		return -1
+		panic(ErrWASMMigrate)
 	}
 
 	value := make([]byte, valLen)
@@ -1279,8 +1281,7 @@ func MigrateContract(proc *exec.Process, newAddr, args, argsLen, val, valLen, ca
 	checkGas(ctx, gas)
 	gas = ctx.evm.callGasTemp
 
-	sender := ctx.contract.caller.Address()
-	oldContract := ctx.contract.Address()
+	sender := ctx.contract.CallerAddress
 
 	// check code of old contract
 	oldCode := ctx.evm.StateDB.GetCode(oldContract)
@@ -1290,13 +1291,14 @@ func MigrateContract(proc *exec.Process, newAddr, args, argsLen, val, valLen, ca
 
 	// check balance of sender
 	if !ctx.evm.CanTransfer(ctx.evm.StateDB, sender, bValue) {
-		return -1
+		panic(ErrInsufficientBalance)
 	}
 
-	nonce := ctx.evm.StateDB.GetNonce(oldContract)
+	senderNonce := ctx.evm.StateDB.GetNonce(sender)
+
 	// create new contract address
-	newContract := crypto.CreateAddress(oldContract, nonce)
-	ctx.evm.StateDB.SetNonce(oldContract, nonce+1)
+	newContract := crypto.CreateAddress(sender, senderNonce)
+	ctx.evm.StateDB.SetNonce(sender, senderNonce+1)
 
 	// Ensure there's no existing contract already at the designated address
 	contractHash := ctx.evm.StateDB.GetCodeHash(newContract)
@@ -1361,10 +1363,13 @@ func MigrateContract(proc *exec.Process, newAddr, args, argsLen, val, valLen, ca
 	if maxCodeSizeExceeded && err == nil {
 		err = errMaxCodeSizeExceeded
 	}
-	ctx.contract.Gas += contract.Gas
+
 	if nil != err {
 		panic(err)
 	}
+
+	ctx.contract.Gas += contract.Gas
+
 	_, err = proc.WriteAt(newContract.Bytes(), int64(newAddr))
 	if nil != err {
 		panic(err)

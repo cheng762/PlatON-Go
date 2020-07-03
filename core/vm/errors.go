@@ -29,5 +29,4 @@ var (
 	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
 	ErrAbort                    = errors.New("vm exec abort")
 	ErrExecBadContract          = errors.New("exec bad contract")
-	ErrUnderPrice               = errors.New("gas price is lower than minimum")
 )
