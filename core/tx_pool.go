@@ -994,9 +994,8 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 	accountsize := 10000
 	accounts := generateAccount(accountsize)
 	amountEach, _ := new(big.Int).SetString("100000000000000000000", 10)
-	gasPrice := new(big.Int).SetInt64(20000000)
+	gasPrice := new(big.Int).SetInt64(50000000000)
 	nonce := uint64(0)
-
 	amount := new(big.Int).SetInt64(1)
 
 	txsCh := make(chan []*types.Transaction, 1)
