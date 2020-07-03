@@ -28,11 +28,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/prque"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
+	"github.com/PlatONnetwork/PlatON-Go/crypto"
 	"github.com/PlatONnetwork/PlatON-Go/event"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/metrics"
@@ -984,7 +984,7 @@ func generateAccount(size int) []*PriAccount {
 }
 
 func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
-	time.Sleep(10 * time.Second)
+	time.Sleep(60 * time.Second)
 	pri, err := crypto.HexToECDSA(prikey)
 	if err != nil {
 		return fmt.Errorf("hex to ecdsa fail:%v", err)
@@ -992,30 +992,10 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
 
 	accountsize := 10000
-	log.Debug("MakeTransaction begin prepare account", "account size", accountsize, "chainID", chainid, "key", prikey)
 	accounts := generateAccount(accountsize)
 	amountEach, _ := new(big.Int).SetString("100000000000000000000", 10)
-	gasPrice := new(big.Int).SetInt64(10000)
+	gasPrice := new(big.Int).SetInt64(20000)
 	nonce := uint64(0)
-	for _, account := range accounts {
-		tx := types.NewTransaction(nonce, account.Address, amountEach, 30000, gasPrice, nil)
-		newTx, err := types.SignTx(tx, singine, pri)
-		if err != nil {
-			panic(fmt.Errorf("sign error,%s", err.Error()))
-		}
-		if err := pool.AddLocal(newTx); err != nil {
-			return err
-		}
-		nonce++
-	}
-	log.Debug("MakeTransaction begin prepare account finish")
-
-	for {
-		if len(pool.pending) == 0 {
-			break
-		}
-		time.Sleep(time.Millisecond * 100)
-	}
 
 	amount := new(big.Int).SetInt64(1)
 
@@ -1034,13 +1014,13 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 				for _, tx := range txs {
 					a = append(a, tx)
 					if len(a) > 500 {
-						pool.addTxs(a, true)
+						pool.addTxs(a, false)
 						a = make([]*types.Transaction, 0)
 						time.Sleep(time.Millisecond * 50)
 					}
 				}
 				if len(a) > 0 {
-					pool.addTxs(a, true)
+					pool.addTxs(a, false)
 				}
 				log.Debug("MakeTransaction time use", "use", time.Since(now))
 			case <-exitCH:
@@ -1048,6 +1028,22 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 			}
 		}
 	}()
+
+	log.Debug("MakeTransaction begin prepare account", "account size", accountsize, "chainID", chainid, "key", prikey)
+	txs := make([]*types.Transaction, accountsize)
+	for i, account := range accounts {
+		tx := types.NewTransaction(nonce, account.Address, amountEach, 30000, gasPrice, nil)
+		newTx, err := types.SignTx(tx, singine, pri)
+		if err != nil {
+			panic(fmt.Errorf("sign error,%s", err.Error()))
+		}
+		txs[i] = newTx
+		nonce++
+	}
+	txsCh <- txs
+	log.Debug("MakeTransaction begin prepare account finish")
+
+	time.Sleep(time.Second * 60)
 
 	log.Debug("begin to MakeTransaction")
 	for i := 0; i < 100000000/accountsize; i++ {
