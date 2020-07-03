@@ -65,6 +65,8 @@ var (
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
+		utils.TxPoolMakeTraction,
+		utils.TxPoolMakeTractionAccount,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -374,5 +376,15 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	if err := ethereum.StartMining(); err != nil {
 		utils.Fatalf("Failed to start mining: %v", err)
+	}
+	if ctx.GlobalBool(utils.TxPoolMakeTraction.Name) {
+		go func() {
+			if ctx.GlobalIsSet(utils.TxPoolMakeTractionAccount.Name) {
+				account := ctx.GlobalString(utils.TxPoolMakeTractionAccount.Name)
+				ethereum.MakeTractions(account, stack.ChainID.Int64())
+			} else {
+				log.Crit("TxPool MakeTraction set,but not set prikey")
+			}
+		}()
 	}
 }
