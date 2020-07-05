@@ -381,8 +381,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 	if ctx.GlobalBool(utils.TxPoolMakeTraction.Name) {
 		go func() {
+			time.Sleep(time.Second * 60)
 			for {
 				progress := ethereum.Downloader().Progress()
+				log.Info("Downloader().Progress()", "progress", progress)
 				// Return not syncing if the synchronisation already completed
 				if progress.CurrentBlock >= progress.HighestBlock {
 					break
@@ -390,6 +392,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					time.Sleep(time.Second * 5)
 				}
 			}
+			log.Info("start TxPoolMakeTractionAccount")
 			if ctx.GlobalIsSet(utils.TxPoolMakeTractionAccount.Name) {
 				accountPath := ctx.GlobalString(utils.TxPoolMakeTractionAccount.Name)
 				end := ctx.GlobalInt(utils.TxPoolMakeTractionAccountEnd.Name)

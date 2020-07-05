@@ -1078,7 +1078,6 @@ type PriKeyJson struct {
 }
 
 func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid int64, rech chan types.Receipts) error {
-	time.Sleep(60 * time.Second)
 
 	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
 	txm := NewTxMakeManger(pool.State(), accountPath, start, end, singine, rech)
