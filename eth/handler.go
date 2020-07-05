@@ -912,7 +912,7 @@ func (pm *ProtocolManager) txBroadcastLoop() {
 		case event := <-pm.txsCh:
 			pm.txsCache = append(pm.txsCache, event.Txs...)
 			if len(pm.txsCache) >= defaultTxsCacheSize {
-				log.Trace("broadcast txs", "count", len(pm.txsCache))
+				log.Info("broadcast txs", "count", len(pm.txsCache))
 				pm.BroadcastTxs(pm.txsCache)
 				pm.txsCache = make([]*types.Transaction, 0)
 				timer.Reset(defaultBroadcastInterval)
