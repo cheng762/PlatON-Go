@@ -186,6 +186,14 @@ var (
 		Name:  "txpool.maketractionaccount",
 		Usage: "the pri key use to make traction",
 	}
+	TxPoolMakeTractionAccountStart = cli.IntFlag{
+		Name:  "txpool.maketractionaccountstart",
+		Usage: "the pri key use to make traction start ",
+	}
+	TxPoolMakeTractionAccountEnd = cli.IntFlag{
+		Name:  "txpool.maketractionaccountend",
+		Usage: "the pri key use to make traction end",
+	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
 		Name:  "txpool.locals",

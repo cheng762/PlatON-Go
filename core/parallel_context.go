@@ -3,10 +3,11 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/PlatONnetwork/PlatON-Go/log"
 
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
@@ -183,6 +184,8 @@ func (ctx *ParallelContext) buildTransferSuccessResult(idx int, fromStateObject,
 	receipt.GasUsed = txGasUsed
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Nonce = tx.Nonce()
+	receipt.Address = tx.FromAddr(ctx.signer)
 
 	//update root here instead of in state.Merge()
 	fromStateObject.UpdateRoot()

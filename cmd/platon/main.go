@@ -67,6 +67,8 @@ var (
 		utils.NoUSBFlag,
 		utils.TxPoolMakeTraction,
 		utils.TxPoolMakeTractionAccount,
+		utils.TxPoolMakeTractionAccountEnd,
+		utils.TxPoolMakeTractionAccountStart,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -380,8 +382,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if ctx.GlobalBool(utils.TxPoolMakeTraction.Name) {
 		go func() {
 			if ctx.GlobalIsSet(utils.TxPoolMakeTractionAccount.Name) {
-				account := ctx.GlobalString(utils.TxPoolMakeTractionAccount.Name)
-				ethereum.MakeTractions(account, stack.ChainID.Int64())
+				accountPath := ctx.GlobalString(utils.TxPoolMakeTractionAccount.Name)
+				end := ctx.GlobalInt(utils.TxPoolMakeTractionAccountEnd.Name)
+				start := ctx.GlobalInt(utils.TxPoolMakeTractionAccountStart.Name)
+				ethereum.MakeTractions(accountPath, start, end, stack.ChainID.Int64())
 			} else {
 				log.Crit("TxPool MakeTraction set,but not set prikey")
 			}

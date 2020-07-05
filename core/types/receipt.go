@@ -55,6 +55,9 @@ type Receipt struct {
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
 	ContractAddress common.Address `json:"contractAddress"`
 	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+
+	Address common.Address `json:"-" rlp:"-"`
+	Nonce   uint64         `json:"-" rlp:"-"`
 }
 
 type receiptMarshaling struct {

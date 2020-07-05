@@ -105,6 +105,8 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.TxPoolMakeTraction,
 			utils.TxPoolMakeTractionAccount,
+			utils.TxPoolMakeTractionAccountEnd,
+			utils.TxPoolMakeTractionAccountStart,
 			utils.TxPoolLocalsFlag,
 			utils.TxPoolNoLocalsFlag,
 			utils.TxPoolJournalFlag,

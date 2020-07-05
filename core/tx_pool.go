@@ -18,11 +18,12 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -971,32 +972,116 @@ type PriAccount struct {
 	Priv    *ecdsa.PrivateKey
 	Nonce   uint64
 	Address common.Address
+
+	SendCount     int
+	ReceiptsNonce uint64
+	SleepTime     time.Time
 }
 
-func generateAccount(size int) []*PriAccount {
-	addrs := make([]*PriAccount, size)
-	for i := 0; i < size; i++ {
-		privateKey, _ := crypto.GenerateKey()
-		address := crypto.PubkeyToAddress(privateKey.PublicKey)
-		addrs[i] = &PriAccount{privateKey, 0, address}
+type TxMakeManger struct {
+	accounts    map[common.Address]*PriAccount
+	accountSize uint
+	singer      types.EIP155Signer
+	ReceiptCh   chan types.Receipts // Channel to receive new Receipt
+}
+
+func (t *TxMakeManger) MakeTx(eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
+	size := len(t.accounts)
+	lessSize := size / 5
+	for {
+		txs := make([]*types.Transaction, 0)
+		for _, account := range t.accounts {
+			if account.SendCount >= 10 {
+				if account.Nonce == account.ReceiptsNonce+1 {
+					account.SendCount = 0
+				} else {
+					if account.SendCount == 10 {
+						account.SleepTime = time.Now()
+						account.SendCount++
+						continue
+					} else {
+						account.SendCount++
+						if time.Now().Sub(account.SleepTime) >= time.Second*60 {
+							account.Nonce = account.ReceiptsNonce + 1
+							account.SendCount = 0
+						} else {
+							continue
+						}
+					}
+				}
+			}
+			tx := types.NewTransaction(account.Nonce, account.Address, eachAmount, 30000, gasPrice, nil)
+			newTx, err := types.SignTx(tx, t.singer, account.Priv)
+			if err != nil {
+				log.Crit(fmt.Errorf("sign error,%s", err.Error()).Error())
+			}
+			txs = append(txs, newTx)
+			account.Nonce++
+			account.SendCount++
+		}
+		txch <- txs
+		if len(txs) <= lessSize {
+			time.Sleep(time.Second)
+		}
 	}
-	return addrs
 }
 
-func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
-	time.Sleep(60 * time.Second)
-	pri, err := crypto.HexToECDSA(prikey)
+func (t *TxMakeManger) AccountNonceCheck() {
+	for {
+		select {
+		case res := <-t.ReceiptCh:
+			for _, receipt := range res {
+				if account, ok := t.accounts[receipt.Address]; ok {
+					if receipt.Nonce > account.ReceiptsNonce {
+						account.ReceiptsNonce = receipt.Nonce
+					}
+				}
+			}
+		}
+	}
+}
+
+func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start, end int, singer types.EIP155Signer, rech chan types.Receipts) *TxMakeManger {
+	file, err := os.Open(accountPath)
 	if err != nil {
-		return fmt.Errorf("hex to ecdsa fail:%v", err)
+		log.Crit("Failed to read genesis file", "err", err)
 	}
-	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
+	defer file.Close()
 
-	accountsize := 10000
-	accounts := generateAccount(accountsize)
-	amountEach, _ := new(big.Int).SetString("100000000000000000000", 10)
-	gasPrice := new(big.Int).SetInt64(50000000000)
-	nonce := uint64(0)
-	amount := new(big.Int).SetInt64(1)
+	var priKey []PriKeyJson
+	if err := json.NewDecoder(file).Decode(&priKey); err != nil {
+		log.Crit("invalid genesis file chain id", "err", err)
+	}
+
+	t := new(TxMakeManger)
+	t.accounts = make(map[common.Address]*PriAccount)
+	for i := start; i <= end; i++ {
+		privateKey, err := crypto.HexToECDSA(priKey[i].Pri)
+		if err != nil {
+			log.Crit("NewTxMakeManger HexToECDSA fail", "err", err)
+		}
+		address, err := common.Bech32ToAddress(priKey[i].Add)
+		if err != nil {
+			log.Crit("NewTxMakeManger Bech32ToAddress fail", "err", err)
+		}
+		nonce := pendingState.GetNonce(address)
+		t.accounts[address] = &PriAccount{privateKey, nonce, address, 0, nonce, time.Time{}}
+	}
+	t.singer = singer
+	t.ReceiptCh = rech
+	return t
+}
+
+type PriKeyJson struct {
+	Pri string `json:"private_key"`
+	Add string `json:"address"`
+}
+
+func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid int64, rech chan types.Receipts) error {
+	time.Sleep(60 * time.Second)
+
+	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
+	txm := NewTxMakeManger(pool.State(), accountPath, start, end, singine, rech)
 
 	txsCh := make(chan []*types.Transaction, 1)
 	exitCH := make(chan struct{})
@@ -1012,14 +1097,24 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 				now := time.Now()
 				for _, tx := range txs {
 					a = append(a, tx)
-					if len(a) > 500 {
-						pool.addTxs(a, false)
+					if len(a) > 499 {
+						errs := pool.addTxs(a, false)
+						for _, err := range errs {
+							if err != nil && err != ErrNonceTooLow {
+								log.Crit("add tx error", "err", err)
+							}
+						}
 						a = make([]*types.Transaction, 0)
 						time.Sleep(time.Millisecond * 50)
 					}
 				}
 				if len(a) > 0 {
-					pool.addTxs(a, false)
+					errs := pool.addTxs(a, false)
+					for _, err := range errs {
+						if err != nil && err != ErrNonceTooLow {
+							log.Crit("add tx error", "err", err)
+						}
+					}
 				}
 				log.Debug("MakeTransaction time use", "use", time.Since(now))
 			case <-exitCH:
@@ -1028,40 +1123,12 @@ func (pool *TxPool) MakeTransaction(prikey string, chainid int64) error {
 		}
 	}()
 
-	log.Debug("MakeTransaction begin prepare account", "account size", accountsize, "chainID", chainid, "key", prikey)
-	txs := make([]*types.Transaction, accountsize)
-	for i, account := range accounts {
-		tx := types.NewTransaction(nonce, account.Address, amountEach, 30000, gasPrice, nil)
-		newTx, err := types.SignTx(tx, singine, pri)
-		if err != nil {
-			panic(fmt.Errorf("sign error,%s", err.Error()))
-		}
-		txs[i] = newTx
-		nonce++
-	}
-	txsCh <- txs
-	log.Debug("MakeTransaction begin prepare account finish")
+	go txm.AccountNonceCheck()
 
-	time.Sleep(time.Second * 60)
-
-	log.Debug("begin to MakeTransaction")
-	for i := 0; i < 100000000/accountsize; i++ {
-		txs := make([]*types.Transaction, accountsize)
-		for n, account := range accounts {
-			tx := types.NewTransaction(account.Nonce, accounts[rand.Int31n(int32(accountsize))].Address, amount, 30000, gasPrice, nil)
-			newTx, err := types.SignTx(tx, singine, account.Priv)
-			if err != nil {
-				log.Crit(fmt.Errorf("sign error,%s", err.Error()).Error())
-			}
-			txs[n] = newTx
-			account.Nonce++
-		}
-
-		txsCh <- txs
-		if i%10 == 0 {
-			log.Debug("Transaction have be send", "i", i*accountsize)
-		}
-	}
+	log.Info("begin to MakeTransaction")
+	gasPrice := new(big.Int).SetInt64(50000000000)
+	amount := new(big.Int).SetInt64(1)
+	txm.MakeTx(amount, gasPrice, txsCh)
 	exitCH <- struct{}{}
 	log.Debug("finish to MakeTransaction")
 	return nil
@@ -1293,10 +1360,6 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 		if replace, errs[i] = pool.add(tx, local); errs[i] == nil && !replace {
 			from, _ := types.Sender(pool.signer, tx) // already validated
 			dirty[from] = struct{}{}
-		} else {
-			if errs[i] != nil {
-				panic(errs[i])
-			}
 		}
 	}
 	// Only reprocess the internal state if something was actually added
