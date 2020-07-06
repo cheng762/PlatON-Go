@@ -989,7 +989,7 @@ type TxMakeManger struct {
 }
 
 func (t *TxMakeManger) MakeTx(perTx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
-	shouldmake := time.NewTicker(time.Millisecond * 200)
+	shouldmake := time.NewTicker(time.Millisecond * 50)
 	shouldReport := time.NewTicker(time.Second * 2)
 	length := len(t.toPool)
 	for {
@@ -1155,7 +1155,7 @@ func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid 
 	log.Info("begin to MakeTransaction")
 	gasPrice := new(big.Int).SetInt64(50000000000)
 	amount := new(big.Int).SetInt64(1)
-	txm.MakeTx(500, amount, gasPrice, txsCh)
+	txm.MakeTx(100, amount, gasPrice, txsCh)
 	exitCH <- struct{}{}
 	log.Debug("finish to MakeTransaction")
 	return nil
