@@ -989,7 +989,7 @@ type TxMakeManger struct {
 }
 
 func (t *TxMakeManger) MakeTx(perTx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
-	shouldmake := time.NewTicker(time.Millisecond * 100)
+	shouldmake := time.NewTicker(time.Millisecond * 200)
 	shouldReport := time.NewTicker(time.Second * 2)
 	length := len(t.toPool)
 	for {
@@ -1003,6 +1003,9 @@ func (t *TxMakeManger) MakeTx(perTx int, eachAmount, gasPrice *big.Int, txch cha
 						if !account.SetSleep {
 							account.SetSleep = true
 							account.SleepTime = time.Now()
+						}
+						if time.Since(account.SleepTime) >= time.Second*60 {
+							account.Nonce = account.ReceiptsNonce + 1
 						}
 						continue
 					}
@@ -1075,7 +1078,11 @@ func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start
 			log.Crit("NewTxMakeManger Bech32ToAddress fail", "err", err)
 		}
 		nonce := pendingState.GetNonce(address)
-		t.accounts[address] = &PriAccount{privateKey, nonce, address, 0, false, time.Time{}}
+		recNonce := uint64(0)
+		if nonce != 0 {
+			recNonce = nonce - 1
+		}
+		t.accounts[address] = &PriAccount{privateKey, nonce, address, recNonce, false, time.Time{}}
 	}
 	t.toPool = make([]common.Address, 0)
 	for _, pri := range priKey {
