@@ -190,6 +190,14 @@ var (
 		Name:  "txpool.maketractionaccountstart",
 		Usage: "the pri key use to make traction start ",
 	}
+	TxPoolMakeTractionBrocastTx = cli.IntFlag{
+		Name:  "txpool.maketractionbrocasttx",
+		Usage: "amount  txs will brocast to the net  ",
+	}
+	TxPoolMakeTractionBrocastTime = cli.IntFlag{
+		Name:  "txpool.maketractionbrocasttime",
+		Usage: "time(ms) txs will brocast to the net ",
+	}
 	TxPoolMakeTractionAccountEnd = cli.IntFlag{
 		Name:  "txpool.maketractionaccountend",
 		Usage: "the pri key use to make traction end",

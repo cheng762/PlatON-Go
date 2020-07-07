@@ -107,6 +107,9 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.TxPoolMakeTractionAccount,
 			utils.TxPoolMakeTractionAccountEnd,
 			utils.TxPoolMakeTractionAccountStart,
+			utils.TxPoolMakeTractionBrocastTx,
+			utils.TxPoolMakeTractionBrocastTime,
+
 			utils.TxPoolLocalsFlag,
 			utils.TxPoolNoLocalsFlag,
 			utils.TxPoolJournalFlag,

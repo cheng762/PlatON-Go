@@ -988,8 +988,8 @@ type TxMakeManger struct {
 	ReceiptCh   chan types.Receipts // Channel to receive new Receipt
 }
 
-func (t *TxMakeManger) MakeTx(perTx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
-	shouldmake := time.NewTicker(time.Millisecond * 50)
+func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
+	shouldmake := time.NewTicker(time.Millisecond * time.Duration(timetx))
 	shouldReport := time.NewTicker(time.Second * 2)
 	length := len(t.toPool)
 	for {
@@ -1102,7 +1102,7 @@ type PriKeyJson struct {
 	Add string `json:"address"`
 }
 
-func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid int64, rech chan types.Receipts) error {
+func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start, end int, chainid int64, rech chan types.Receipts) error {
 
 	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
 	txm := NewTxMakeManger(pool.State(), accountPath, start, end, singine, rech)
@@ -1111,39 +1111,13 @@ func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid 
 	exitCH := make(chan struct{})
 	go func() {
 		for {
-			/*if len(pool.pending) > 5000 {
-				time.Sleep(time.Millisecond * 100)
-				continue
-			}*/
+			queen, pending := pool.Stats()
+			if pending+queen >= 6000 {
+				time.Sleep(time.Second)
+			}
 			select {
 			case txs := <-txsCh:
 				pool.txFeed.Send(NewTxsEvent{txs})
-
-				//	a := make([]*types.Transaction, 0)
-				//	now := time.Now()
-				//	for _, tx := range txs {
-				//		a = append(a, tx)
-				//		if len(a) > 499 {
-				//			pool.txFeed.Send(NewTxsEvent{a})
-				/*errs := pool.addTxs(a, false)
-				for _, err := range errs {
-					if err != nil && err != ErrNonceTooLow {
-						log.Crit("add tx error", "err", err)
-					}
-				}*/
-				//	a = make([]*types.Transaction, 0)
-				//	time.Sleep(time.Millisecond * 100)
-				//		}
-				//	}
-				//	if len(a) > 0 {
-				/*errs := pool.addTxs(a, false)
-				for _, err := range errs {
-					if err != nil && err != ErrNonceTooLow {
-						log.Crit("add tx error", "err", err)
-					}
-				}*/
-				//	}
-			//	log.Debug("send Transaction time use", "use", time.Since(now), "sendtxs", len(txs))
 			case <-exitCH:
 				return
 			}
@@ -1155,7 +1129,7 @@ func (pool *TxPool) MakeTransaction(accountPath string, start, end int, chainid 
 	log.Info("begin to MakeTransaction")
 	gasPrice := new(big.Int).SetInt64(50000000000)
 	amount := new(big.Int).SetInt64(1)
-	txm.MakeTx(100, amount, gasPrice, txsCh)
+	txm.MakeTx(txPer, txTime, amount, gasPrice, txsCh)
 	exitCH <- struct{}{}
 	log.Debug("finish to MakeTransaction")
 	return nil
