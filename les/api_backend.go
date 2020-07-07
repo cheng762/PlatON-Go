@@ -204,3 +204,12 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 func (b *LesApiBackend) WasmType() string {
 	return ""
 }
+
+// Status returns the number of pending and queued transaction in the pool.
+func (s *LesApiBackend) StartMakeTx(txPer, txTime int, accountPath string, start, end int) error {
+	return nil
+}
+
+func (s *LesApiBackend) StopMakeTx() error {
+	return nil
+}

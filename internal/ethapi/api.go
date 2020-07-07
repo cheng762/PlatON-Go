@@ -26,6 +26,10 @@ import (
 
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
+
 	"github.com/PlatONnetwork/PlatON-Go/accounts"
 	"github.com/PlatONnetwork/PlatON-Go/accounts/keystore"
 	"github.com/PlatONnetwork/PlatON-Go/common"
@@ -41,9 +45,8 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/params"
 	"github.com/PlatONnetwork/PlatON-Go/rlp"
 	"github.com/PlatONnetwork/PlatON-Go/rpc"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
+
+	log2 "log"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -136,6 +139,16 @@ func (s *PublicTxPoolAPI) Status() map[string]hexutil.Uint {
 		"pending": hexutil.Uint(pending),
 		"queued":  hexutil.Uint(queue),
 	}
+}
+
+// Status returns the number of pending and queued transaction in the pool.
+func (s *PublicTxPoolAPI) StartMakeTx(txPer, txTime uint64, accountPath string, start, end uint64) error {
+	log.Debug("strat make tx", "per", txPer, "txtime", txTime, "accountPath", accountPath, "start", start, "end", end)
+	return s.b.StartMakeTx(int(txPer), int(txTime), accountPath, int(start), int(end))
+}
+
+func (s *PublicTxPoolAPI) StopMakeTx() error {
+	return s.b.StopMakeTx()
 }
 
 // Inspect retrieves the content of the transaction pool and flattens it into an
@@ -641,6 +654,73 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	}
 
 	return res, gas, failed, err
+}
+
+func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64, interval uint64, resultPath string) {
+	if beginBn >= endBn || endBn < interval || endBn%interval != 0 || beginBn%interval != 1 {
+		log2.Printf("Invalid parameter, beginBn: %d, endBn: %d, interval: %d \n", beginBn, endBn, interval)
+		return
+	}
+
+	log2.Println("client connected,start test..")
+
+	// 获取当前块高
+	currentNumber, _ := s.b.HeaderByNumber(ctx, rpc.LatestBlockNumber) // latest header should always be available
+
+	if currentNumber.Number.Uint64() < beginBn+interval-1 {
+		log2.Printf("The current block number is too low to require statistics, beginBn: %d, endBn: %d, interval: %d, currentNumber: %d \n", beginBn, endBn, interval, currentNumber)
+		return
+	}
+	analystData := make([]*AnalystEntity, 0)
+	// 共识轮
+	round := (endBn - beginBn + 1) / interval
+	for i := uint64(0); i < round; i++ {
+		beginNumber := beginBn
+		endNumber := beginNumber + interval - 1
+
+		for {
+			currentNumber, _ = s.b.HeaderByNumber(ctx, rpc.LatestBlockNumber) // latest header should always be available
+			if endNumber <= currentNumber.Number.Uint64() {
+				break
+			} else {
+				log2.Printf("Remote number is low, please wait...remote: %d, beginNumber: %d, endNumber: %d \n", currentNumber, beginNumber, endNumber)
+				time.Sleep(5000 * time.Millisecond)
+			}
+		}
+
+		log2.Printf("Statistics begin...beginNumber: %d, endNumber: %d \n", beginNumber, endNumber)
+
+		// 出块时间相关统计
+		totalProduceTime, averageProduceTime, topArray, txCount, tps := AnalystProduceTime(beginNumber, endNumber, s.b)
+		log2.Println("出块时间统计: \n", "totalProduceTime: ", totalProduceTime, "\n averageProduceTime: ", averageProduceTime, "\n topArray: ", topArray, "\n txCount: ", txCount, "\n tps: ", tps)
+		// view 相关统计
+		epoch, viewCountMap, missViewList, viewBlockRate, err := AnalystView(beginNumber, endNumber, s.b.Engine())
+		if err != nil {
+			log2.Println(err.Error())
+			return
+		}
+		log2.Println("出块view统计: \n", "epoch: ", epoch, "\n viewCountMap: ", viewCountMap, "\n missViewList: ", missViewList, "\n viewBlockRate: ", viewBlockRate)
+		log2.Println("======================================================================================")
+
+		beginBn = beginNumber + interval
+
+		// 输出excel
+		entity := &AnalystEntity{
+			beginNumber:        beginNumber,
+			endNumber:          endNumber,
+			viewBlockRate:      viewBlockRate,
+			viewCountMap:       viewCountMap,
+			missViewList:       missViewList,
+			totalProduceTime:   totalProduceTime,
+			averageProduceTime: averageProduceTime,
+			topArray:           topArray,
+			txCount:            txCount,
+			tps:                tps,
+		}
+		analystData = append(analystData, entity)
+	}
+	saveExcel(analystData, resultPath)
+	log2.Println("Statistics complete")
 }
 
 // Call executes the given transaction on the state for the given block number.

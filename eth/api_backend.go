@@ -42,8 +42,9 @@ import (
 
 // EthAPIBackend implements ethapi.Backend for full nodes
 type EthAPIBackend struct {
-	eth *Ethereum
-	gpo *gasprice.Oracle
+	eth    *Ethereum
+	gpo    *gasprice.Oracle
+	resSub event.Subscription
 }
 
 // ChainConfig returns the active chain configuration.
@@ -236,4 +237,17 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 
 func (b *EthAPIBackend) WasmType() string {
 	return b.eth.config.VMWasmType
+}
+
+func (b *EthAPIBackend) StartMakeTx(txPer, txTime int, accountPath string, start, end int) error {
+	rech := make(chan types.Receipts, 20)
+	b.resSub = b.eth.blockchain.SubscribeReceiptssEvent(rech)
+	return b.eth.txPool.MakeTransaction(txPer, txTime, accountPath, start, end, rech)
+
+}
+
+func (b *EthAPIBackend) StopMakeTx() error {
+	b.resSub.Unsubscribe()
+	b.eth.txPool.StopMakeTraction()
+	return nil
 }

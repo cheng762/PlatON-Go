@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"time"
 
+	ctypes "github.com/PlatONnetwork/PlatON-Go/consensus/cbft/types"
+
 	"github.com/PlatONnetwork/PlatON-Go/event"
 
 	"github.com/PlatONnetwork/PlatON-Go/common/consensus"
@@ -66,6 +68,10 @@ type BftMock struct {
 	Base        *types.Block
 	fakeFail    uint64 // Block number which fails BFT check even in fake mode
 	//fakeDelay time.Duration // Time delay to sleep for before returning from verify
+}
+
+func (bm *BftMock) GetPrepareQC(number uint64) *ctypes.QuorumCert {
+	panic("implement me")
 }
 
 // InsertChain is a fake interface, no need to implement.

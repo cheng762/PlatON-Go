@@ -266,6 +266,8 @@ type TxPool struct {
 	filterKnowns int32
 
 	resetHead *types.Block
+
+	maketxExitCh chan struct{}
 }
 
 type txExt struct {
@@ -988,7 +990,7 @@ type TxMakeManger struct {
 	ReceiptCh   chan types.Receipts // Channel to receive new Receipt
 }
 
-func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction) {
+func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction, exitCh chan struct{}) {
 	shouldmake := time.NewTicker(time.Millisecond * time.Duration(timetx))
 	shouldReport := time.NewTicker(time.Second * 2)
 	length := len(t.toPool)
@@ -1035,21 +1037,9 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 				}
 			}
 			log.Debug("MakeTx info", "sleepAccount", sleepAccount)
-		}
-	}
-}
-
-func (t *TxMakeManger) AccountNonceCheck() {
-	for {
-		select {
-		case res := <-t.ReceiptCh:
-			for _, receipt := range res {
-				if account, ok := t.accounts[receipt.Address]; ok {
-					if receipt.Nonce > account.ReceiptsNonce {
-						account.ReceiptsNonce = receipt.Nonce
-					}
-				}
-			}
+		case <-exitCh:
+			log.Debug("MakeTransaction exit")
+			return
 		}
 	}
 }
@@ -1102,13 +1092,13 @@ type PriKeyJson struct {
 	Add string `json:"address"`
 }
 
-func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start, end int, chainid int64, rech chan types.Receipts) error {
+func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start, end int, rech chan types.Receipts) error {
 
-	singine := types.NewEIP155Signer(new(big.Int).SetInt64(chainid))
+	singine := types.NewEIP155Signer(new(big.Int).SetInt64(pool.chainconfig.ChainID.Int64()))
 	txm := NewTxMakeManger(pool.State(), accountPath, start, end, singine, rech)
 
 	txsCh := make(chan []*types.Transaction, 1)
-	exitCH := make(chan struct{})
+	pool.maketxExitCh = make(chan struct{})
 	go func() {
 		for {
 			queen, pending := pool.Stats()
@@ -1118,21 +1108,40 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 			select {
 			case txs := <-txsCh:
 				pool.txFeed.Send(NewTxsEvent{txs})
-			case <-exitCH:
+			case <-pool.maketxExitCh:
+				log.Debug("MakeTransaction txfeed exit")
 				return
 			}
 		}
 	}()
 
-	go txm.AccountNonceCheck()
+	go func() {
+		for {
+			select {
+			case res := <-txm.ReceiptCh:
+				for _, receipt := range res {
+					if account, ok := txm.accounts[receipt.Address]; ok {
+						if receipt.Nonce > account.ReceiptsNonce {
+							account.ReceiptsNonce = receipt.Nonce
+						}
+					}
+				}
+			case <-pool.maketxExitCh:
+				log.Debug("MakeTransaction get receipt nonce  exit")
+				return
+			}
+		}
+	}()
 
 	log.Info("begin to MakeTransaction")
 	gasPrice := new(big.Int).SetInt64(50000000000)
 	amount := new(big.Int).SetInt64(1)
-	txm.MakeTx(txPer, txTime, amount, gasPrice, txsCh)
-	exitCH <- struct{}{}
-	log.Debug("finish to MakeTransaction")
+	go txm.MakeTx(txPer, txTime, amount, gasPrice, txsCh, pool.maketxExitCh)
 	return nil
+}
+
+func (pool *TxPool) StopMakeTraction() {
+	close(pool.maketxExitCh)
 }
 
 // AddLocal enqueues a single transaction into the pool if it is valid, marking

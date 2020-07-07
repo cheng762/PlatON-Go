@@ -178,30 +178,6 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	TxPoolMakeTraction = cli.BoolFlag{
-		Name:  "txpool.maketraction",
-		Usage: "make a lot traction",
-	}
-	TxPoolMakeTractionAccount = cli.StringFlag{
-		Name:  "txpool.maketractionaccount",
-		Usage: "the pri key use to make traction",
-	}
-	TxPoolMakeTractionAccountStart = cli.IntFlag{
-		Name:  "txpool.maketractionaccountstart",
-		Usage: "the pri key use to make traction start ",
-	}
-	TxPoolMakeTractionBrocastTx = cli.IntFlag{
-		Name:  "txpool.maketractionbrocasttx",
-		Usage: "amount  txs will brocast to the net  ",
-	}
-	TxPoolMakeTractionBrocastTime = cli.IntFlag{
-		Name:  "txpool.maketractionbrocasttime",
-		Usage: "time(ms) txs will brocast to the net ",
-	}
-	TxPoolMakeTractionAccountEnd = cli.IntFlag{
-		Name:  "txpool.maketractionaccountend",
-		Usage: "the pri key use to make traction end",
-	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
 		Name:  "txpool.locals",

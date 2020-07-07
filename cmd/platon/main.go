@@ -65,12 +65,6 @@ var (
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
-		utils.TxPoolMakeTraction,
-		utils.TxPoolMakeTractionAccount,
-		utils.TxPoolMakeTractionAccountEnd,
-		utils.TxPoolMakeTractionAccountStart,
-		utils.TxPoolMakeTractionBrocastTx,
-		utils.TxPoolMakeTractionBrocastTime,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -380,33 +374,5 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	if err := ethereum.StartMining(); err != nil {
 		utils.Fatalf("Failed to start mining: %v", err)
-	}
-	if ctx.GlobalBool(utils.TxPoolMakeTraction.Name) {
-		go func() {
-			time.Sleep(time.Second * 60)
-			for {
-				progress := ethereum.Downloader().Progress()
-				log.Info("Downloader().Progress()", "progress", progress)
-				// Return not syncing if the synchronisation already completed
-				if progress.CurrentBlock >= progress.HighestBlock {
-					break
-				} else {
-					time.Sleep(time.Second * 5)
-				}
-			}
-			log.Info("start TxPoolMakeTractionAccount")
-			if ctx.GlobalIsSet(utils.TxPoolMakeTractionAccount.Name) {
-				accountPath := ctx.GlobalString(utils.TxPoolMakeTractionAccount.Name)
-				end := ctx.GlobalInt(utils.TxPoolMakeTractionAccountEnd.Name)
-				start := ctx.GlobalInt(utils.TxPoolMakeTractionAccountStart.Name)
-
-				per := ctx.GlobalInt(utils.TxPoolMakeTractionBrocastTx.Name)
-				tim := ctx.GlobalInt(utils.TxPoolMakeTractionBrocastTime.Name)
-
-				ethereum.MakeTractions(per, tim, accountPath, start, end, stack.ChainID.Int64())
-			} else {
-				log.Crit("TxPool MakeTraction set,but not set prikey")
-			}
-		}()
 	}
 }

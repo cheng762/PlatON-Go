@@ -112,15 +112,6 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
-func (s *Ethereum) MakeTractions(txPer, txTime int, accountPath string, start, end int, chainid int64) {
-	rech := make(chan types.Receipts, 20)
-	s.blockchain.SubscribeReceiptssEvent(rech)
-	err := s.txPool.MakeTransaction(txPer, txTime, accountPath, start, end, chainid, rech)
-	if err != nil {
-		panic(err)
-	}
-}
-
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
@@ -377,7 +368,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.APIBackend = &EthAPIBackend{eth, nil}
+	eth.APIBackend = &EthAPIBackend{eth, nil, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.MinerGasPrice

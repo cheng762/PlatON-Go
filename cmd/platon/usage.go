@@ -103,13 +103,6 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
-			utils.TxPoolMakeTraction,
-			utils.TxPoolMakeTractionAccount,
-			utils.TxPoolMakeTractionAccountEnd,
-			utils.TxPoolMakeTractionAccountStart,
-			utils.TxPoolMakeTractionBrocastTx,
-			utils.TxPoolMakeTractionBrocastTime,
-
 			utils.TxPoolLocalsFlag,
 			utils.TxPoolNoLocalsFlag,
 			utils.TxPoolJournalFlag,
