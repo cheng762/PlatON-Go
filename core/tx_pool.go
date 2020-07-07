@@ -1026,7 +1026,7 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 				}
 			}
 			if len(txs) != 0 {
-				log.Debug("make Transaction time use", "use", time.Since(now), "txs", len(txs))
+				log.Trace("make Transaction time use", "use", time.Since(now), "txs", len(txs))
 				txch <- txs
 			}
 		case <-shouldReport.C:
@@ -1101,10 +1101,6 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 	pool.maketxExitCh = make(chan struct{})
 	go func() {
 		for {
-			queen, pending := pool.Stats()
-			if pending+queen >= 6000 {
-				time.Sleep(time.Second)
-			}
 			select {
 			case txs := <-txsCh:
 				pool.txFeed.Send(NewTxsEvent{txs})

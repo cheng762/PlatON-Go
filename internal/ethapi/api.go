@@ -656,10 +656,9 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	return res, gas, failed, err
 }
 
-func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64, interval uint64, resultPath string) {
+func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64, interval uint64, resultPath string) error {
 	if beginBn >= endBn || endBn < interval || endBn%interval != 0 || beginBn%interval != 1 {
-		log2.Printf("Invalid parameter, beginBn: %d, endBn: %d, interval: %d \n", beginBn, endBn, interval)
-		return
+		return errors.New(fmt.Sprintf("Invalid parameter, beginBn: %d, endBn: %d, interval: %d \n", beginBn, endBn, interval))
 	}
 
 	log2.Println("client connected,start test..")
@@ -668,8 +667,7 @@ func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64,
 	currentNumber, _ := s.b.HeaderByNumber(ctx, rpc.LatestBlockNumber) // latest header should always be available
 
 	if currentNumber.Number.Uint64() < beginBn+interval-1 {
-		log2.Printf("The current block number is too low to require statistics, beginBn: %d, endBn: %d, interval: %d, currentNumber: %d \n", beginBn, endBn, interval, currentNumber)
-		return
+		return errors.New(fmt.Sprintf("The current block number is too low to require statistics, beginBn: %d, endBn: %d, interval: %d, currentNumber: %d \n", beginBn, endBn, interval, currentNumber))
 	}
 	analystData := make([]*AnalystEntity, 0)
 	// 共识轮
@@ -696,8 +694,7 @@ func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64,
 		// view 相关统计
 		epoch, viewCountMap, missViewList, viewBlockRate, err := AnalystView(beginNumber, endNumber, s.b.Engine())
 		if err != nil {
-			log2.Println(err.Error())
-			return
+			return err
 		}
 		log2.Println("出块view统计: \n", "epoch: ", epoch, "\n viewCountMap: ", viewCountMap, "\n missViewList: ", missViewList, "\n viewBlockRate: ", viewBlockRate)
 		log2.Println("======================================================================================")
@@ -721,6 +718,7 @@ func (s *PublicBlockChainAPI) GetTps(ctx context.Context, beginBn, endBn uint64,
 	}
 	saveExcel(analystData, resultPath)
 	log2.Println("Statistics complete")
+	return nil
 }
 
 // Call executes the given transaction on the state for the given block number.
