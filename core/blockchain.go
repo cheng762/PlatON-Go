@@ -115,7 +115,7 @@ type BlockChain struct {
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
-	receiptsFeed  event.Feed
+	ReceiptsFeed  event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -1240,7 +1240,7 @@ func (bc *BlockChain) ProcessDirectly(block *types.Block, state *state.StateDB, 
 		bc.logsFeed.Send(logs)
 	}
 	if len(receipts) > 0 {
-		bc.receiptsFeed.Send(receipts)
+		bc.ReceiptsFeed.Send(receipts)
 	}
 
 	return receipts, nil
@@ -1625,7 +1625,7 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeReceiptssEvent(ch chan<- types.Receipts) event.Subscription {
-	return bc.scope.Track(bc.receiptsFeed.Subscribe(ch))
+	return bc.scope.Track(bc.ReceiptsFeed.Subscribe(ch))
 }
 
 // EnableDBGC enable database garbage collection.
