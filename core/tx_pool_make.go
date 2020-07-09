@@ -110,6 +110,8 @@ func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start
 
 	t := new(TxMakeManger)
 	t.accounts = make(map[common.Address]*PriAccount)
+	t.toPool = make([]common.Address, 0)
+
 	for i := start; i <= end; i++ {
 		privateKey, err := crypto.HexToECDSA(priKey[i].Pri)
 		if err != nil {
@@ -121,15 +123,14 @@ func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start
 		}
 		nonce := pendingState.GetNonce(address)
 		t.accounts[address] = &PriAccount{privateKey, nonce, address, nonce, time.Now()}
+		t.toPool = append(t.toPool, address)
 	}
-	t.toPool = make([]common.Address, 0)
-	for _, pri := range priKey {
+	/*	for _, pri := range priKey {
 		address, err := common.Bech32ToAddress(pri.Add)
 		if err != nil {
 			log.Crit("NewTxMakeManger Bech32ToAddress fail", "err", err)
 		}
-		t.toPool = append(t.toPool, address)
-	}
+	}*/
 	t.singer = singer
 	t.ReceiptCh = rech
 	t.sleepAccounts = make(map[common.Address]struct{})

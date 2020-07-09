@@ -18,6 +18,7 @@ package eth
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
@@ -35,6 +36,32 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/p2p"
 	"github.com/PlatONnetwork/PlatON-Go/params"
 )
+
+func TestNew(t *testing.T) {
+
+	var prefix []int = make([]int, 19, 19)
+
+	tmp := []int{6, 11, 6, 11, 3, 2, 6, 11, 6, 11, 3, 2, 6, 4, 6, 3, 3, 1, 6}
+
+	for i, i2 := range tmp {
+		prefix[i] = i2
+	}
+
+	var fullNodeSuffix []int = []int{102, 117, 108, 108, 110, 111, 100, 101}
+	xxa := append(prefix, fullNodeSuffix...)
+	fmt.Println("xxxxxx111", "pprefix", xxa)
+	xxb := append(prefix, 3)
+	fmt.Println("xxxxxx111", "prefix", xxb)
+	a := append(prefix, fullNodeSuffix...)
+	b := append(prefix, 3)
+	aaaaaaaa(a, b)
+	fmt.Println("xxxxxx222")
+
+}
+
+func aaaaaaaa(a, b []int) {
+	fmt.Println(a, b)
+}
 
 // Tests that protocol versions and modes of operations are matched up properly.
 func TestProtocolCompatibility(t *testing.T) {
