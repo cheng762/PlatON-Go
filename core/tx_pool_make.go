@@ -22,34 +22,13 @@ type PriAccount struct {
 	Address common.Address
 
 	ReceiptsNonce uint64
-	SetSleep      bool
-	SleepTime     time.Time
-}
-
-func (p *PriAccount) setSleep() {
-	p.SleepTime = time.Now()
-	p.SetSleep = true
-}
-
-func (p *PriAccount) active() {
-	p.SetSleep = false
-}
-
-func (p *PriAccount) reset() {
-	p.SetSleep = false
-	p.Nonce = p.ReceiptsNonce + 1
-}
-
-func (p *PriAccount) isSleep() bool {
-	if p.SetSleep {
-		return true
-	}
-	return false
+	SendTime      time.Time
 }
 
 type TxMakeManger struct {
-	accounts map[common.Address]*PriAccount
-	toPool   []common.Address
+	accounts      map[common.Address]*PriAccount
+	sleepAccounts map[common.Address]struct{}
+	toPool        []common.Address
 
 	accountSize uint
 	singer      types.EIP155Signer
@@ -58,25 +37,31 @@ type TxMakeManger struct {
 
 func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction, exitCh chan struct{}) {
 	shouldmake := time.NewTicker(time.Millisecond * time.Duration(timetx))
-	shouldReport := time.NewTicker(time.Second * 3)
+	shouldReport := time.NewTicker(time.Second * 4)
 	length := len(t.toPool)
 
-	lowpoint := 10000
-	uppoiont := 8000
+	lowpoint := 4000
+	uppoiont := 3000
 	for {
 		select {
 		case <-shouldmake.C:
 			now := time.Now()
 			txs := make([]*types.Transaction, 0)
 			for _, account := range t.accounts {
-				if account.isSleep() {
-					if time.Since(account.SleepTime) >= time.Second*60 {
-						log.Debug("wait account 60s", "account", account.Address, "nonce", account.Nonce)
-						account.reset()
+				if account.Nonce >= account.ReceiptsNonce+5 {
+					if time.Since(account.SendTime) >= time.Second*30 {
+						log.Debug("wait account 30s", "account", account.Address, "nonce", account.Nonce, "receiptnonce", account.ReceiptsNonce, "wait time", time.Since(account.SendTime))
+						account.Nonce = account.ReceiptsNonce + 1
+						delete(t.sleepAccounts, account.Address)
+					} else {
+						if _, ok := t.sleepAccounts[account.Address]; !ok {
+							t.sleepAccounts[account.Address] = struct{}{}
+						}
+						continue
 					}
-					continue
+				} else {
+					delete(t.sleepAccounts, account.Address)
 				}
-
 				toAdd := t.toPool[rand.Intn(length)]
 				tx := types.NewTransaction(account.Nonce, toAdd, eachAmount, 30000, gasPrice, nil)
 				newTx, err := types.SignTx(tx, t.singer, account.Priv)
@@ -84,8 +69,8 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 					log.Crit(fmt.Errorf("sign error,%s", err.Error()).Error())
 				}
 				txs = append(txs, newTx)
-
-				account.setSleep()
+				account.Nonce++
+				account.SendTime = time.Now()
 				if len(txs) >= perTx {
 					break
 				}
@@ -95,25 +80,18 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 				txch <- txs
 			}
 		case <-shouldReport.C:
-			sleepAccount := 0
-			for _, account := range t.accounts {
-				if account.isSleep() {
-					sleepAccount++
-				}
-			}
-			if sleepAccount >= lowpoint {
+			sleepAccountsLength := len(t.sleepAccounts)
+			if sleepAccountsLength >= lowpoint {
 				perTx = perTx - 2
-
-			} else if sleepAccount <= uppoiont {
+			} else if sleepAccountsLength <= uppoiont {
 				perTx = perTx + 2
-
 			}
-			log.Debug("MakeTx info", "sleepAccount", sleepAccount, "perTx", perTx)
+			log.Debug("MakeTx info", "sleepAccount", sleepAccountsLength, "perTx", perTx)
 		case <-exitCh:
 			shouldmake.Stop()
-			//shouldReport.Stop()
-			//log.Debug("MakeTransaction exit")
-			//return
+			shouldReport.Stop()
+			log.Debug("MakeTransaction exit")
+			return
 		}
 	}
 }
@@ -142,7 +120,7 @@ func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start
 			log.Crit("NewTxMakeManger Bech32ToAddress fail", "err", err)
 		}
 		nonce := pendingState.GetNonce(address)
-		t.accounts[address] = &PriAccount{privateKey, nonce, address, nonce, false, time.Time{}}
+		t.accounts[address] = &PriAccount{privateKey, nonce, address, nonce, time.Now()}
 	}
 	t.toPool = make([]common.Address, 0)
 	for _, pri := range priKey {
@@ -154,6 +132,7 @@ func NewTxMakeManger(pendingState *state.ManagedState, accountPath string, start
 	}
 	t.singer = singer
 	t.ReceiptCh = rech
+	t.sleepAccounts = make(map[common.Address]struct{})
 	return t
 }
 
@@ -176,7 +155,7 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 				pool.txFeed.Send(NewTxsEvent{txs})
 			case <-pool.maketxExitCh:
 				log.Debug("MakeTransaction txfeed exit")
-				//return
+				return
 			}
 		}
 	}()
@@ -187,25 +166,12 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 			case res := <-txm.ReceiptCh:
 				for _, receipt := range res {
 					if account, ok := txm.accounts[receipt.Address]; ok {
-						if receipt.Nonce != account.Nonce {
-							log.Error("get receipt nonce not compare current nonce", "current", account.Nonce, "receipt", receipt.Nonce)
-						} else {
-							account.ReceiptsNonce = receipt.Nonce
-							account.Nonce = receipt.Nonce + 1
-							account.active()
-						}
+						account.ReceiptsNonce = receipt.Nonce
 					}
 				}
-				sleepAccount := 0
-				for _, account := range txm.accounts {
-					if account.isSleep() {
-						sleepAccount++
-					}
-				}
-				log.Debug("MakeTransaction receive info", "sleepAccount", sleepAccount)
 			case <-pool.maketxExitCh:
 				log.Debug("MakeTransaction get receipt nonce  exit")
-				//return
+				return
 			}
 		}
 	}()
