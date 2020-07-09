@@ -37,11 +37,11 @@ type TxMakeManger struct {
 
 func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction, exitCh chan struct{}) {
 	shouldmake := time.NewTicker(time.Millisecond * time.Duration(timetx))
-	shouldReport := time.NewTicker(time.Second * 4)
+	shouldReport := time.NewTicker(time.Second * 10)
 	length := len(t.toPool)
 
-	lowpoint := 4000
-	uppoiont := 3000
+	//	lowpoint := 4000
+	//	uppoiont := 3000
 	for {
 		select {
 		case <-shouldmake.C:
@@ -81,11 +81,11 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 			}
 		case <-shouldReport.C:
 			sleepAccountsLength := len(t.sleepAccounts)
-			if sleepAccountsLength >= lowpoint {
-				perTx = perTx - 2
-			} else if sleepAccountsLength <= uppoiont {
-				perTx = perTx + 2
-			}
+			/*	if sleepAccountsLength >= lowpoint {
+					perTx = perTx - 2
+				} else if sleepAccountsLength <= uppoiont {
+					perTx = perTx + 2
+				}*/
 			log.Debug("MakeTx info", "sleepAccount", sleepAccountsLength, "perTx", perTx)
 		case <-exitCh:
 			shouldmake.Stop()
