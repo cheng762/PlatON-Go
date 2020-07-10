@@ -170,9 +170,9 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 		for {
 			select {
 			case res := <-txm.ReceiptCh:
+				txm.ReceiptTime = time.Now()
 				for _, receipt := range res {
 					if account, ok := txm.accounts[receipt.Address]; ok {
-						txm.ReceiptTime = time.Now()
 						account.ReceiptsNonce = receipt.Nonce
 					}
 				}
