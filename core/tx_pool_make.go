@@ -45,6 +45,7 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 	//	uppoiont := 3000
 	for {
 		if time.Since(t.ReceiptTime) >= 10*time.Second {
+			log.Debug("MakeTx should sleep", "time", time.Since(t.ReceiptTime))
 			time.Sleep(time.Second * 5)
 			continue
 		}
