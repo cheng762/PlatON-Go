@@ -172,11 +172,14 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 			select {
 			case res := <-txm.ReceiptCh:
 				txm.ReceiptTime = time.Now()
-				for _, receipt := range res {
-					if account, ok := txm.accounts[receipt.Address]; ok {
-						account.ReceiptsNonce = receipt.Nonce
+				if len(res) > 0 {
+					for _, receipt := range res {
+						if account, ok := txm.accounts[receipt.Address]; ok {
+							account.ReceiptsNonce = receipt.Nonce
+						}
 					}
 				}
+
 			case <-pool.maketxExitCh:
 				log.Debug("MakeTransaction get receipt nonce  exit")
 				return

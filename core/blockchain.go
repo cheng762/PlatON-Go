@@ -1239,9 +1239,7 @@ func (bc *BlockChain) ProcessDirectly(block *types.Block, state *state.StateDB, 
 	if logs != nil {
 		bc.logsFeed.Send(logs)
 	}
-	if len(receipts) > 0 {
-		bc.ReceiptsFeed.Send(receipts)
-	}
+	bc.ReceiptsFeed.Send(receipts)
 
 	return receipts, nil
 }
