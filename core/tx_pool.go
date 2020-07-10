@@ -1054,11 +1054,6 @@ func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
 	if len(newTxs) == 0 {
 		return nil
 	}
-	now := time.Now()
-	for _, tx := range newTxs {
-		tx.FromAddr(pool.signer)
-	}
-	log.Debug("AddRemotes get address", "time", time.Since(now), "tx", len(txs))
 	errCh := make(chan interface{}, 1)
 	txExt := &txExt{newTxs, false, errCh}
 	select {

@@ -33,6 +33,7 @@ type TxMakeManger struct {
 	accountSize uint
 	singer      types.EIP155Signer
 	ReceiptCh   chan types.Receipts // Channel to receive new Receipt
+	ReceiptTime time.Time
 }
 
 func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.Int, txch chan []*types.Transaction, exitCh chan struct{}) {
@@ -43,6 +44,10 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 	//	lowpoint := 4000
 	//	uppoiont := 3000
 	for {
+		if time.Since(t.ReceiptTime) >= 10*time.Second {
+			time.Sleep(time.Second * 5)
+			continue
+		}
 		select {
 		case <-shouldmake.C:
 			now := time.Now()
@@ -167,6 +172,7 @@ func (pool *TxPool) MakeTransaction(txPer, txTime int, accountPath string, start
 			case res := <-txm.ReceiptCh:
 				for _, receipt := range res {
 					if account, ok := txm.accounts[receipt.Address]; ok {
+						txm.ReceiptTime = time.Now()
 						account.ReceiptsNonce = receipt.Nonce
 					}
 				}
