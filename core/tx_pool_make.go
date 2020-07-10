@@ -53,6 +53,7 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 		case <-shouldmake.C:
 			now := time.Now()
 			txs := make([]*types.Transaction, 0)
+			toAdd := t.toPool[rand.Intn(length)]
 			for _, account := range t.accounts {
 				if account.Nonce >= account.ReceiptsNonce+8 {
 					if time.Since(account.SendTime) >= time.Second*30 {
@@ -68,7 +69,6 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 				} else {
 					delete(t.sleepAccounts, account.Address)
 				}
-				toAdd := t.toPool[rand.Intn(length)]
 				tx := types.NewTransaction(account.Nonce, toAdd, eachAmount, 30000, gasPrice, nil)
 				newTx, err := types.SignTx(tx, t.singer, account.Priv)
 				if err != nil {
