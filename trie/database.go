@@ -369,6 +369,7 @@ func (db *Database) node(hash common.Hash) node {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
+			log.Debug("get node form cache")
 			return mustDecodeNode(hash[:], enc)
 		}
 	}
