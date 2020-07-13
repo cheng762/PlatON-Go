@@ -369,7 +369,6 @@ func (db *Database) node(hash common.Hash) node {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			log.Debug("get node form cache")
 			return mustDecodeNode(hash[:], enc)
 		}
 	}
@@ -381,7 +380,6 @@ func (db *Database) node(hash common.Hash) node {
 	if dirty != nil {
 		return dirty.obj(hash)
 	}
-	log.Debug("get node form diskdb")
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, err := db.diskdb.Get(hash[:])
 	if err != nil || enc == nil {
