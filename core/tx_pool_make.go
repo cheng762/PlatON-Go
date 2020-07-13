@@ -55,7 +55,7 @@ func (t *TxMakeManger) MakeTx(perTx int, timetx int, eachAmount, gasPrice *big.I
 			txs := make([]*types.Transaction, 0)
 			toAdd := t.toPool[rand.Intn(length)]
 			for _, account := range t.accounts {
-				if account.Nonce >= account.ReceiptsNonce+8 {
+				if account.Nonce >= account.ReceiptsNonce+10 {
 					if time.Since(account.SendTime) >= time.Second*30 {
 						log.Debug("wait account 30s", "account", account.Address, "nonce", account.Nonce, "receiptnonce", account.ReceiptsNonce, "wait time", time.Since(account.SendTime))
 						account.Nonce = account.ReceiptsNonce + 1
