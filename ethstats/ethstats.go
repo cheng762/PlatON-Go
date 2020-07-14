@@ -29,6 +29,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatONnetwork/PlatON-Go/crypto"
+	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
+
+	"golang.org/x/net/websocket"
+
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/mclock"
 	"github.com/PlatONnetwork/PlatON-Go/consensus"
@@ -40,7 +45,6 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/p2p"
 	"github.com/PlatONnetwork/PlatON-Go/rpc"
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -119,6 +123,7 @@ func (s *Service) APIs() []rpc.API { return nil }
 // Start implements node.Service, starting up the monitoring and reporting daemon.
 func (s *Service) Start(server *p2p.Server) error {
 	s.server = server
+	oldHeaderTime = new(big.Int)
 	go s.loop()
 
 	log.Info("Stats daemon started")
@@ -261,10 +266,10 @@ func (s *Service) loop() {
 				if err = s.reportPending(conn); err != nil {
 					log.Warn("Post-block transaction stats report failed", "err", err)
 				}
-			case <-txCh:
+				/*case <-txCh:
 				if err = s.reportPending(conn); err != nil {
 					log.Warn("Transaction stats report failed", "err", err)
-				}
+				}*/
 			}
 		}
 		// Make sure the connection is closed
@@ -477,6 +482,8 @@ type blockStats struct {
 	Txs        []txStats      `json:"transactions"`
 	TxHash     common.Hash    `json:"transactionsRoot"`
 	Root       common.Hash    `json:"stateRoot"`
+	NodeID     string         `json:"node_id"`
+	Interval   *big.Int       `json:"interval"`
 }
 
 // txStats is the information to report about individual transactions.
@@ -501,6 +508,8 @@ func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 	}
 	return websocket.JSON.Send(conn, report)
 }
+
+var oldHeaderTime *big.Int
 
 // assembleBlockStats retrieves any required metadata to report a single block
 // and assembles the block stats. If block is nil, the current head is processed.
@@ -533,6 +542,21 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
+	inever := new(big.Int).Sub(header.Time, oldHeaderTime)
+
+	oldHeaderTime.Set(header.Time)
+
+	var nodID discover.NodeID
+	if block != nil {
+		if block.Header() != nil && block.Number().Uint64() != 0 {
+			pubKey, err := crypto.SigToPub(block.Header().SealHash().Bytes(), block.Extra()[32:])
+			if err != nil {
+				log.Error("assembleBlockStats fail", "err", err, "block", block.Number())
+			}
+			nodID = discover.PubkeyID(pubKey)
+		}
+	}
+
 	return &blockStats{
 		Number:     header.Number,
 		Hash:       header.Hash(),
@@ -544,6 +568,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Txs:        txs,
 		TxHash:     header.TxHash,
 		Root:       header.Root,
+		NodeID:     nodID.String(),
+		Interval:   inever,
 	}
 }
 
@@ -611,15 +637,16 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 // pendStats is the information to report about pending transactions.
 type pendStats struct {
 	Pending int `json:"pending"`
+	Queened int `json:"queened"`
 }
 
 // reportPending retrieves the current number of pending transactions and reports
 // it to the stats server.
 func (s *Service) reportPending(conn *websocket.Conn) error {
 	// Retrieve the pending count from the local blockchain
-	var pending int
+	var pending, queen int
 	if s.eth != nil {
-		pending, _ = s.eth.TxPool().Stats()
+		pending, queen = s.eth.TxPool().Stats()
 	} else {
 		pending = s.les.TxPool().Stats()
 	}
@@ -630,6 +657,7 @@ func (s *Service) reportPending(conn *websocket.Conn) error {
 		"id": s.node,
 		"stats": &pendStats{
 			Pending: pending,
+			Queened: queen,
 		},
 	}
 	report := map[string][]interface{}{

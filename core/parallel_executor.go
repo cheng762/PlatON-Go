@@ -1,6 +1,14 @@
 package core
 
 import (
+	"math/big"
+	"runtime"
+	"sync"
+	"time"
+
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/panjf2000/ants/v2"
+
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
@@ -8,12 +16,6 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/internal/debug"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/hashicorp/golang-lru"
-	"github.com/panjf2000/ants/v2"
-	"math/big"
-	"runtime"
-	"sync"
-	"time"
 )
 
 const (

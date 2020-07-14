@@ -30,11 +30,12 @@ import (
 
 	"github.com/PlatONnetwork/PlatON-Go/core/snapshotdb"
 
+	"github.com/naoina/toml"
+
 	"github.com/PlatONnetwork/PlatON-Go/cmd/utils"
 	"github.com/PlatONnetwork/PlatON-Go/eth"
 	"github.com/PlatONnetwork/PlatON-Go/node"
 	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/naoina/toml"
 )
 
 var (
@@ -165,9 +166,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, platonConfig) {
 	//	cfg.Eth.CbftConfig = *cbftConfig
 	//}
 
-	//if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-	//	cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
-	//}
+	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	}
 
 	//utils.SetShhConfig(ctx, stack, &cfg.Shh)
 
