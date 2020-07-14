@@ -258,11 +258,7 @@ func (exe *Executor) cacheTxFromAddress(txs []*types.Transaction, signer types.S
 	for _, tx := range txs {
 		txpool_tx := exe.txpool.all.Get(tx.Hash())
 		if txpool_tx != nil {
-			fromAddress := txpool_tx.FromAddr(signer)
-			if fromAddress != (common.Address{}) {
-				tx.CacheFromAddr(signer, fromAddress)
-				hit++
-			}
+			tx = txpool_tx
 		}
 	}
 	log.Debug("Parallel execute cacheTxFromAddress", "hit", hit, "total", len(txs))
