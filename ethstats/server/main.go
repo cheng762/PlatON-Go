@@ -36,9 +36,9 @@ func echoHandler(ws *websocket.Conn) {
 			tmp := block["block"].(map[string]interface{})
 			if tmp["transactions"] != nil {
 				txs := tmp["transactions"].([]interface{})
-				log.Printf("block info,num:%v,hash:%v,miner:%v,interval:%v,txs:%v", tmp["number"], tmp["hash"], tmp["node_id"], tmp["interval"], len(txs))
+				log.Printf("block info,  num:%v  ,  txs:%v  ,  interval:%v  ,  miner:%v  ", tmp["number"], len(txs), tmp["interval"], tmp["node_id"])
 			} else {
-				log.Printf("block info,num:%v,hash:%v,miner:%v,interval:%v,txs:0", tmp["number"], tmp["hash"], tmp["node_id"], tmp["interval"])
+				log.Printf("block info,num:%vinterval:%v,miner:%v", tmp["number"], tmp["interval"], tmp["node_id"])
 			}
 		case "pending":
 			stats := msg["emit"][1].(map[string]interface{})
