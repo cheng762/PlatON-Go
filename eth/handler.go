@@ -784,7 +784,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			break
 		}
 		// Transactions can be processed, parse all of them and deliver to the pool
-		var txs []*types.Transaction
+		/*var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -796,7 +796,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 
-		go pm.txpool.AddRemotes(txs)
+		go pm.txpool.AddRemotes(txs)*/
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
