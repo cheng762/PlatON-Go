@@ -147,6 +147,7 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				log.Debug("MakeTx get receipt nonce  exit")
 				return
 			case res := <-blockExcuteCh:
+				txm.blockProduceTime = time.Now()
 				for _, receipt := range res.Transactions() {
 					if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
 						if account.ReceiptsNonce < receipt.Nonce() {
