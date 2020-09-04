@@ -107,7 +107,7 @@ func (txg *TxGenAPI) Start(normalTx, evmTx, wasmTx uint, totalTxPer, activeTxPer
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 1)
 
 	blockch := make(chan *types.Block, 20)
-	txg.blockfeed = txg.eth.blockchain.SubscribeWriteStateBlocksEvent(blockch)
+	//txg.blockfeed = txg.eth.blockchain.SubscribeWriteStateBlocksEvent(blockch)
 
 	blockExecutech := make(chan *types.Block, 20)
 	txg.blockExecuteFeed = txg.eth.blockchain.SubscribeExecuteBlocksEvent(blockExecutech)
@@ -224,30 +224,6 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				} else {
 					log.Debug("MakeTx with no tx", "use", time.Since(now), "deactive", deactive)
 				}
-			case res := <-blockQCCh:
-				txm.blockProduceTime = time.Now()
-				txLength := len(res.Transactions())
-				var timeUse time.Duration
-				currentLength := 0
-				if txLength > 0 {
-					for _, receipt := range res.Transactions() {
-						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
-							currentLength++
-							if ac, ok := account.SendTime[receipt.Nonce()]; ok {
-								timeUse = timeUse + time.Since(ac)
-								delete(account.SendTime, receipt.Nonce())
-							} else {
-								continue
-							}
-						}
-					}
-					if currentLength > 0 {
-						txg.res.Ttf = append(txg.res.Ttf, Ttf{txm.blockProduceTime, res.Number().Int64(), currentLength, timeUse})
-					}
-					txg.res.Tps = append(txg.res.Tps, Tps{common.MillisToTime(res.Header().Time.Int64()), res.Number().Int64(), txLength})
-				}
-
-				log.Debug("MakeTx receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", txLength)
 			case <-txg.txGenStopTxCh:
 				shouldmake.Stop()
 				log.Debug("MakeTx exit")
@@ -425,7 +401,7 @@ func (txg *TxGenAPI) Stop(resPath string) error {
 
 	close(txg.txGenExitCh)
 	txg.start = false
-	txg.blockfeed.Unsubscribe()
+	//txg.blockfeed.Unsubscribe()
 	txg.blockExecuteFeed.Unsubscribe()
 
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 0)
