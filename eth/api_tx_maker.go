@@ -188,7 +188,7 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				deactive := 0
 
 				loop := 0
-				loopEnd := len(txm.accounts)
+				loopEnd := len(txm.accounts) * 3
 				for len(txs) <= txm.totalSenderTxPer {
 					if loop > loopEnd {
 						break
