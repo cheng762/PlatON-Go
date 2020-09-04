@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	cacheTtfSize = 3600
-
 	reportTime             = time.Second * 10
 	waitBLockTime          = time.Second * 10
 	waitAccountReceiptTime = time.Second * 20
@@ -44,18 +42,50 @@ func NewTxGenAPI(eth *Ethereum) *TxGenAPI {
 }
 
 type Ttf struct {
-	TxLength int
-	TimeUse  time.Duration
+	BlockProduceTime time.Time     `json:"id_time"`
+	Block            int64         `json:"block"`
+	TxLength         int           `json:"tx_length"`
+	TimeUse          time.Duration `json:"time_use"`
+}
+
+type ttfs []Ttf
+
+func (t ttfs) Len() int {
+	return len(t)
+}
+
+func (t ttfs) Less(i, j int) bool {
+	if t[i].BlockProduceTime.Before(t[j].BlockProduceTime) {
+		return true
+	}
+	return false
+}
+
+func (t ttfs) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+type Tps struct {
+	BlockProduceTime time.Time `json:"id_time"`
+	Block            int64     `json:"block"`
+	TxLength         int       `json:"tx_length"`
+}
+
+type TxGenResData struct {
+	Ttf         []Ttf  `json:"ttf"`
+	Tps         []Tps  `json:"tps"`
+	TotalTxSend uint64 `json:"total_tx_send"`
 }
 
 type TxGenAPI struct {
-	eth         *Ethereum
-	txGenExitCh chan struct{}
-	start       bool
-	blockfeed   event.Subscription
-	ttfInfo     sync.Map
+	eth              *Ethereum
+	txGenExitCh      chan struct{}
+	txGenStopTxCh    chan struct{}
+	start            bool
+	blockfeed        event.Subscription
+	blockExecuteFeed event.Subscription
 
-	totalTxSend uint64
+	res *TxGenResData
 }
 
 // Start, begin make tx ,Broadcast transactions directly through p2p, without entering the transactin pool
@@ -78,17 +108,25 @@ func (txg *TxGenAPI) Start(normalTx, evmTx, wasmTx uint, totalTxPer, activeTxPer
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 1)
 
 	blockch := make(chan *types.Block, 20)
-	txg.blockfeed = txg.eth.blockchain.SubscribeBlocksEvent(blockch)
+	txg.blockfeed = txg.eth.blockchain.SubscribeWriteStateBlocksEvent(blockch)
+
+	blockExecutech := make(chan *types.Block, 20)
+	txg.blockExecuteFeed = txg.eth.blockchain.SubscribeExecuteBlocksEvent(blockExecutech)
+
 	txg.txGenExitCh = make(chan struct{})
-	txg.totalTxSend = 0
-	if err := txg.makeTransaction(normalTx, evmTx, wasmTx, totalTxPer, activeTxPer, txFrequency, activeSender, sendingAmount, accountPath, start, end, blockch); err != nil {
+	txg.txGenStopTxCh = make(chan struct{})
+	txg.res = new(TxGenResData)
+	txg.res.TotalTxSend = 0
+	txg.res.Tps = make([]Tps, 0)
+	txg.res.Ttf = make([]Ttf, 0)
+	if err := txg.makeTransaction(normalTx, evmTx, wasmTx, totalTxPer, activeTxPer, txFrequency, activeSender, sendingAmount, accountPath, start, end, blockExecutech, blockch); err != nil {
 		return err
 	}
 	txg.start = true
 	return nil
 }
 
-func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, activeSender uint, sendingAmount uint64, accountPath string, start, end uint, blockCh chan *types.Block) error {
+func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, activeSender uint, sendingAmount uint64, accountPath string, start, end uint, blockExcuteCh, blockQCCh chan *types.Block) error {
 	state, err := txg.eth.blockchain.State()
 	if err != nil {
 		return err
@@ -103,14 +141,58 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 	singine := types.NewEIP155Signer(new(big.Int).SetInt64(txg.eth.chainConfig.ChainID.Int64()))
 
 	txsCh := make(chan []*types.Transaction, 1)
+	go func() {
+		for {
+			select {
+			case <-txg.txGenExitCh:
+				log.Debug("MakeTx get receipt nonce  exit")
+				return
+			case res := <-blockExcuteCh:
+				for _, receipt := range res.Transactions() {
+					if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
+						if account.ReceiptsNonce < receipt.Nonce() {
+							account.ReceiptsNonce = receipt.Nonce()
+						}
+					}
+				}
+			case res := <-blockQCCh:
+				txm.blockProduceTime = time.Now()
+				txLength := len(res.Transactions())
+				var timeUse time.Duration
+				currentLength := 0
+				if txLength > 0 {
+					for _, receipt := range res.Transactions() {
+						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
+							currentLength++
+							account.mu.Lock()
+							if ac, ok := account.SendTime[receipt.Nonce()]; ok {
+								timeUse = timeUse + time.Since(ac)
+								delete(account.SendTime, receipt.Nonce())
+								account.mu.Unlock()
+							} else {
+								account.mu.Unlock()
+								continue
+							}
+						}
+					}
+					if currentLength > 0 {
+						txg.res.Ttf = append(txg.res.Ttf, Ttf{txm.blockProduceTime, res.Number().Int64(), currentLength, timeUse})
+					}
+					txg.res.Tps = append(txg.res.Tps, Tps{common.MillisToTime(res.Header().Time.Int64()), res.Number().Int64(), txLength})
+				}
 
+				log.Debug("MakeTx receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", txLength)
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
 			case txs := <-txsCh:
+				//txg.eth.txPool.AddRemotes(txs)
 				txg.eth.protocolManager.txsCh <- core.NewTxsEvent{txs}
 			case <-txg.txGenExitCh:
-				log.Debug("MakeTransaction get receipt nonce  exit")
+				log.Debug("MakeTransaction send tx exit")
 				return
 			}
 		}
@@ -121,29 +203,8 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 
 	go func() {
 		shouldmake := time.NewTicker(time.Millisecond * time.Duration(txm.txFrequency))
-		shouldReport := time.NewTicker(reportTime)
 		for {
 			select {
-			case res := <-blockCh:
-				txm.blockProduceTime = time.Now()
-				txLength := len(res.Transactions())
-				var timeUse time.Duration
-				currentLength := 0
-				if txLength > 0 {
-					for _, receipt := range res.Transactions() {
-						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
-							account.ReceiptsNonce = receipt.Nonce()
-							timeUse = timeUse + time.Since(account.SendTime)
-							currentLength++
-						}
-					}
-				}
-				txg.ttfInfo.Store(res.Number().Uint64(), Ttf{currentLength, timeUse})
-				log.Debug("makeTransaction receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", txLength)
-				//cache latest 3600 block ttfinfo
-				if res.Number().Uint64() > cacheTtfSize {
-					txg.ttfInfo.Delete(res.Number().Uint64() - cacheTtfSize)
-				}
 			case <-shouldmake.C:
 				if time.Since(txm.blockProduceTime) >= waitBLockTime {
 					log.Debug("MakeTx should sleep", "time", time.Since(txm.blockProduceTime))
@@ -152,40 +213,48 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				now := time.Now()
 				txs := make([]*types.Transaction, 0, txm.totalSenderTxPer)
 				toAdd := txm.pickTxReceive()
+				deactive := 0
 
-				for i := 0; i < txm.totalSenderTxPer; i++ {
+				loop := 0
+				loopEnd := len(txm.accounts)
+				for len(txs) <= txm.totalSenderTxPer {
+					if loop > loopEnd {
+						break
+					}
+					loop++
 					var account *txGenSendAccount
-					if i < txm.activeSenderTxPer {
+					if len(txs) < txm.activeSenderTxPer {
 						account = txm.pickActiveSender()
 					} else {
 						account = txm.pickNormalSender()
 					}
-					if !txm.accountActive(account) {
+					if !account.active() {
+						deactive++
 						continue
 					}
 					txContractInputData, txReceive, gasLimit, amount := txm.generateTxParams(toAdd)
-
+					if account.ReceiptsNonce > account.Nonce {
+						account.Nonce = account.ReceiptsNonce + 1
+					}
 					tx := types.NewTransaction(account.Nonce, txReceive, amount, gasLimit, gasPrice, txContractInputData)
 					newTx, err := types.SignTx(tx, singine, account.Priv)
 					if err != nil {
 						log.Crit(fmt.Errorf("sign error,%s", err.Error()).Error())
 					}
-					txg.totalTxSend++
+					txg.res.TotalTxSend++
 					txs = append(txs, newTx)
 					txm.sendDone(account)
 				}
 
 				if len(txs) != 0 {
-					log.Debug("make Transaction time use", "use", time.Since(now), "txs", len(txs))
+					log.Debug("MakeTx time use", "use", time.Since(now), "txs", len(txs), "deactive", deactive)
 					txsCh <- txs
+				} else {
+					log.Debug("MakeTx with no tx", "use", time.Since(now), "deactive", deactive)
 				}
-			case <-shouldReport.C:
-				sleepAccountsLength := len(txm.sleepAccounts)
-				log.Debug("MakeTx info", "sleepAccount", sleepAccountsLength, "perTx", txm.totalSenderTxPer)
-			case <-txg.txGenExitCh:
+			case <-txg.txGenStopTxCh:
 				shouldmake.Stop()
-				shouldReport.Stop()
-				log.Debug("MakeTransaction exit")
+				log.Debug("MakeTx exit")
 				return
 			}
 		}
@@ -193,20 +262,28 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 	return nil
 }
 
-func (txg *TxGenAPI) GetTTF(begin, end uint64) map[uint64]Ttf {
-	res := make(map[uint64]Ttf)
-	for i := begin; i <= end; i++ {
-		v, ok := txg.ttfInfo.Load(i)
-		if !ok {
-			return res
-		}
-		res[i] = v.(Ttf)
+func (txg *TxGenAPI) GetTTF(latest uint64) ([]Ttf, error) {
+	if latest == 0 {
+		return txg.res.Ttf, nil
 	}
-	return res
+	if int(latest) > len(txg.res.Ttf) {
+		return nil, fmt.Errorf("the ttf res Length %v less than %v", len(txg.res.Ttf), latest)
+	}
+	return txg.res.Ttf[len(txg.res.Ttf)-1-int(latest) : len(txg.res.Ttf)-1], nil
+}
+
+func (txg *TxGenAPI) GetTPS(latest uint64) ([]Tps, error) {
+	if latest == 0 {
+		return txg.res.Tps, nil
+	}
+	if int(latest) > len(txg.res.Tps) {
+		return nil, fmt.Errorf("the Tps res Length %v less than %v", len(txg.res.Tps), latest)
+	}
+	return txg.res.Tps[len(txg.res.Tps)-1-int(latest) : len(txg.res.Tps)-1], nil
 }
 
 func (txg *TxGenAPI) GetTotalSend() uint64 {
-	return txg.totalTxSend
+	return txg.res.TotalTxSend
 }
 
 func (txg *TxGenAPI) DeployContracts(prikey string, configPath string) error {
@@ -227,6 +304,9 @@ func (txg *TxGenAPI) DeployContracts(prikey string, configPath string) error {
 
 		for _, input := range [][]*TxGenContractConfig{txgenInput.Wasm, txgenInput.Evm} {
 			for _, config := range input {
+				if config.CallWeights == 0 {
+					continue
+				}
 				tx := types.NewContractCreation(nonce, nil, config.DeployGasLimit, gasPrice, common.Hex2Bytes(config.ContractsCode))
 				newTx, err := types.SignTx(tx, singine, pri)
 				if err != nil {
@@ -247,6 +327,9 @@ func (txg *TxGenAPI) UpdateConfig(configPath string) error {
 	return handelTxGenConfig(configPath, func(txgenInput *TxGenInput) error {
 		for _, input := range [][]*TxGenContractConfig{txgenInput.Wasm, txgenInput.Evm} {
 			for _, config := range input {
+				if config.CallWeights == 0 {
+					continue
+				}
 				hash := common.HexToHash(config.DeployTxHash)
 				tx, blockHash, _, index := rawdb.ReadTransaction(txg.eth.ChainDb(), hash)
 				if tx == nil {
@@ -272,7 +355,7 @@ func (txg *TxGenAPI) UpdateConfig(configPath string) error {
 func handelTxGenConfig(configPath string, handle func(*TxGenInput) error) error {
 	file, err := os.OpenFile(configPath, os.O_RDWR, 0666)
 	if err != nil {
-		return fmt.Errorf("Failed to read genesis file:%v", err)
+		return fmt.Errorf("Failed to open config file:%v", err)
 	}
 	defer file.Close()
 	var txgenInput TxGenInput
@@ -304,18 +387,51 @@ func handelTxGenConfig(configPath string, handle func(*TxGenInput) error) error 
 	return nil
 }
 
-func (txg *TxGenAPI) Stop() error {
+func (txg *TxGenAPI) Stop(resPath string) error {
 	if !txg.start {
 		return errors.New("the tx maker has been closed")
 	}
+	if resPath == "" {
+		close(txg.txGenStopTxCh)
+		close(txg.txGenExitCh)
+		txg.start = false
+		txg.blockfeed.Unsubscribe()
+		txg.blockExecuteFeed.Unsubscribe()
+		atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 0)
+		return nil
+	}
+	file, err := os.Create(resPath)
+	if err != nil {
+		return fmt.Errorf("Failed to open config file:%v", err)
+	}
+	defer file.Close()
+
+	close(txg.txGenStopTxCh)
+	time.Sleep(time.Second * 6)
+
+	output, err := json.Marshal(txg.res)
+	if err != nil {
+		return err
+	}
+
+	if err := file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := file.Write(output); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+
 	close(txg.txGenExitCh)
 	txg.start = false
 	txg.blockfeed.Unsubscribe()
-	//erase ttfInfo
-	txg.ttfInfo.Range(func(key interface{}, value interface{}) bool {
-		txg.ttfInfo.Delete(key)
-		return true
-	})
+	txg.blockExecuteFeed.Unsubscribe()
+
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 0)
 
 	return nil
@@ -337,6 +453,7 @@ type TxGenContractConfig struct {
 	DeployTxHash     string `json:"deploy_contract_tx_hash"`
 	DeployGasLimit   uint64 `json:"deploy_gas_limit"`
 	Type             string `json:"contracts_type"`
+	Name             string `json:"name"`
 	ContractsCode    string `json:"contracts_code"`
 	ContractsAddress string `json:"contracts_address"`
 
@@ -358,7 +475,21 @@ type txGenSendAccount struct {
 	Address common.Address
 
 	ReceiptsNonce uint64
-	SendTime      time.Time
+	LastSendTime  time.Time
+	SendTime      map[uint64]time.Time
+	mu            sync.Mutex
+}
+
+func (account *txGenSendAccount) active() bool {
+	if account.Nonce >= account.ReceiptsNonce+15 {
+		if time.Since(account.LastSendTime) >= waitAccountReceiptTime {
+			log.Debug("wait account 20s", "account", account.Address, "nonce", account.Nonce, "receiptnonce", account.ReceiptsNonce, "wait time", time.Since(account.LastSendTime))
+			account.Nonce = account.ReceiptsNonce + 1
+		} else {
+			return false
+		}
+	}
+	return true
 }
 
 const (
@@ -425,8 +556,6 @@ type TxMakeManger struct {
 	evmReceiver  weightedrand.Chooser
 	wsamReveiver weightedrand.Chooser
 
-	sleepAccounts map[common.Address]struct{}
-
 	blockProduceTime time.Time
 
 	sendTx   uint
@@ -434,24 +563,6 @@ type TxMakeManger struct {
 	sendWasm uint
 
 	sendState uint
-}
-
-func (s *TxMakeManger) accountActive(account *txGenSendAccount) bool {
-	if account.Nonce >= account.ReceiptsNonce+10 {
-		if time.Since(account.SendTime) >= waitAccountReceiptTime {
-			log.Debug("wait account 20s", "account", account.Address, "nonce", account.Nonce, "receiptnonce", account.ReceiptsNonce, "wait time", time.Since(account.SendTime))
-			account.Nonce = account.ReceiptsNonce + 1
-			delete(s.sleepAccounts, account.Address)
-		} else {
-			if _, ok := s.sleepAccounts[account.Address]; !ok {
-				s.sleepAccounts[account.Address] = struct{}{}
-			}
-			return false
-		}
-	} else {
-		delete(s.sleepAccounts, account.Address)
-	}
-	return true
 }
 
 func (s *TxMakeManger) pickActiveSender() *txGenSendAccount {
@@ -479,6 +590,12 @@ var (
 		return prifix.Sum(nil)
 	}()
 
+	evmKVHashAddr = func() []byte {
+		prifix := sha3.NewKeccak256()
+		prifix.Write([]byte("SetKV(uint256)"))
+		return prifix.Sum(nil)
+	}()
+
 	wasmErc20Hash = func() []byte {
 		hash := fnv.New64()
 		hash.Write([]byte("transfer"))
@@ -503,12 +620,17 @@ type WasmKeyValueInfo struct {
 	Count  uint32
 }
 
+type WasmKeyValueAddrInfo struct {
+	Method []byte
+	Val    uint32
+}
+
 var one = common.Uint16ToBytes(1)
 
 func (s *TxMakeManger) generateTxParams(add common.Address) ([]byte, common.Address, uint64, *big.Int) {
 	switch {
 	case s.sendState < s.sendTx:
-		return nil, add, 30000, s.amount
+		return nil, add, 21000, s.amount
 	case s.sendState < s.sendEvm:
 		account := s.evmReceiver.Pick().(*txGenContractReceiver)
 		if account.CallKind == callKindDefine {
@@ -520,6 +642,9 @@ func (s *TxMakeManger) generateTxParams(add common.Address) ([]byte, common.Addr
 			} else if account.Type == "kv" {
 				key, count := int32(account.CallInputs[0].Parameters[0].(float64)), uint32(account.CallInputs[0].Parameters[1].(float64))
 				return BuildEVMInput(evmKVHash, common.Uint32ToBytes(uint32(rand.Int31n(key))), common.Uint32ToBytes(count)), account.ContractsAddress, account.CallInputs[0].GasLimit, nil
+			} else if account.Type == "kv_addr" {
+				val := int32(account.CallInputs[0].Parameters[0].(float64))
+				return BuildEVMInput(evmKVHashAddr, common.Uint32ToBytes(uint32(rand.Int31n(val)))), account.ContractsAddress, account.CallInputs[0].GasLimit, nil
 			}
 		}
 	case s.sendState < s.sendWasm:
@@ -533,6 +658,9 @@ func (s *TxMakeManger) generateTxParams(add common.Address) ([]byte, common.Addr
 			} else if account.Type == "kv" {
 				key, count := int32(account.CallInputs[0].Parameters[0].(float64)), uint32(account.CallInputs[0].Parameters[1].(float64))
 				return BuildWASMInput(WasmKeyValueInfo{wasmkVHash, uint32(rand.Int31n(key)), count}), account.ContractsAddress, account.CallInputs[0].GasLimit, nil
+			} else if account.Type == "kv_addr" {
+				val := int32(account.CallInputs[0].Parameters[0].(float64))
+				return BuildWASMInput(WasmKeyValueAddrInfo{wasmkVHash, uint32(rand.Int31n(val))}), account.ContractsAddress, account.CallInputs[0].GasLimit, nil
 			}
 		}
 	}
@@ -545,8 +673,13 @@ func (s *TxMakeManger) sendDone(account *txGenSendAccount) {
 	if s.sendState >= s.sendWasm {
 		s.sendState = 0
 	}
+	now := time.Now()
+
+	account.mu.Lock()
+	account.SendTime[account.Nonce] = now
+	account.mu.Unlock()
+	account.LastSendTime = now
 	account.Nonce++
-	account.SendTime = time.Now()
 }
 
 func NewTxMakeManger(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, activeSender uint, sendingAmount uint64, GetNonce func(addr common.Address) uint64, getCodeSize func(addr common.Address) int, accountPath string, start, end uint) (*TxMakeManger, error) {
@@ -583,7 +716,10 @@ func NewTxMakeManger(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, a
 			return nil, fmt.Errorf("NewTxMakeManger Bech32ToAddress fail:%v", err)
 		}
 		nonce := GetNonce(address)
-		t.accounts[address] = &txGenSendAccount{privateKey, nonce, address, nonce, time.Now()}
+		now := time.Now()
+		t.accounts[address] = &txGenSendAccount{privateKey, nonce, address, nonce, now, nil, sync.Mutex{}}
+		t.accounts[address].SendTime = make(map[uint64]time.Time)
+		t.accounts[address].SendTime[nonce] = now
 		t.txReceiver = append(t.txReceiver, address)
 
 		if currentAccountLenth < activeSender {
@@ -599,7 +735,6 @@ func NewTxMakeManger(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, a
 	t.activeSenderTxPer = int(activeTxPer)
 	t.txFrequency = int(txFrequency)
 
-	t.sleepAccounts = make(map[common.Address]struct{})
 	t.blockProduceTime = time.Now()
 
 	rand.Seed(time.Now().UTC().UnixNano()) // always seed random!
