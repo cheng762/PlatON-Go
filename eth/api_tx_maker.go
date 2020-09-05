@@ -155,6 +155,7 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 						}
 					}
 				}
+				txm.blockCache[res.Hash()] = res
 				log.Debug("MakeTx receive block3", "num", res.Number(), "cost", time.Since(now))
 			}
 		}
@@ -188,22 +189,34 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				currentLength := 0
 				if txLength > 0 {
 					tmpTime := time.Now()
-					for _, receipt := range res.Transactions() {
-						if tx, ok := txm.txCache[receipt.Hash()]; ok {
-							receipt.CacheFromAddr(singine, tx.FromAddr(singine))
-							delete(txm.txCache, receipt.Hash())
-						}
-						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
-							if ac, ok := account.SendTime[receipt.Nonce()]; ok {
-								currentLength++
-								timeUse = timeUse + time.Duration(current-ac.UnixNano())
-								delete(account.SendTime, receipt.Nonce())
-							} else {
-								continue
+
+					if block, ok := txm.blockCache[res.Hash()]; ok {
+						for _, receipt := range block.Transactions() {
+							if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
+								if ac, ok := account.SendTime[receipt.Nonce()]; ok {
+									currentLength++
+									timeUse = timeUse + time.Duration(current-ac.UnixNano())
+									delete(account.SendTime, receipt.Nonce())
+								} else {
+									continue
+								}
 							}
 						}
+						log.Debug("MakeTx receive block4", "cost", time.Since(tmpTime))
+					} else {
+						for _, receipt := range res.Transactions() {
+							if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
+								if ac, ok := account.SendTime[receipt.Nonce()]; ok {
+									currentLength++
+									timeUse = timeUse + time.Duration(current-ac.UnixNano())
+									delete(account.SendTime, receipt.Nonce())
+								} else {
+									continue
+								}
+							}
+						}
+						log.Debug("MakeTx receive block5", "cost", time.Since(tmpTime))
 					}
-					log.Debug("MakeTx receive block2", "cost", time.Since(tmpTime))
 
 					if currentLength > 0 {
 						txg.res.Ttf = append(txg.res.Ttf, Ttf{txm.blockProduceTime, res.Number().Int64(), currentLength, timeUse})
@@ -211,7 +224,7 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 					txg.res.Tps = append(txg.res.Tps, Tps{common.MillisToTime(res.Header().Time.Int64()), res.Number().Int64(), txLength})
 				}
 
-				log.Debug("MakeTx receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", currentLength, "cost", time.Since(txm.blockProduceTime), "cacheTx", len(txm.txCache))
+				log.Debug("MakeTx receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", currentLength, "cost", time.Since(txm.blockProduceTime), "cacheTx", len(txm.blockCache))
 			case <-shouldmake.C:
 				if time.Since(txm.blockProduceTime) >= waitBLockTime {
 					log.Debug("MakeTx should sleep", "time", time.Since(txm.blockProduceTime))
@@ -250,8 +263,6 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 					}
 					txg.res.TotalTxSend++
 					txs = append(txs, newTx)
-					newTx.CacheFromAddr(singine, account.Address)
-					txm.txCache[newTx.Hash()] = newTx
 
 					txm.sendDone(account)
 				}
@@ -554,7 +565,7 @@ type TxMakeManger struct {
 	//from
 	accounts map[common.Address]*txGenSendAccount
 
-	txCache map[common.Hash]*types.Transaction
+	blockCache map[common.Hash]*types.Block
 
 	activeSender      *accountQueue
 	activeSenderTxPer int
@@ -745,7 +756,7 @@ func NewTxMakeManger(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, a
 	t.activeSenderTxPer = int(activeTxPer)
 	t.txFrequency = int(txFrequency)
 
-	t.txCache = make(map[common.Hash]*types.Transaction)
+	t.blockCache = make(map[common.Hash]*types.Block)
 
 	t.blockProduceTime = time.Now()
 
