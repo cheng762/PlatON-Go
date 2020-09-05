@@ -107,7 +107,7 @@ func (txg *TxGenAPI) Start(normalTx, evmTx, wasmTx uint, totalTxPer, activeTxPer
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 1)
 
 	blockch := make(chan *types.Block, 20)
-	//txg.blockfeed = txg.eth.blockchain.SubscribeWriteStateBlocksEvent(blockch)
+	txg.blockfeed = txg.eth.blockchain.SubscribeWriteStateBlocksEvent(blockch)
 
 	blockExecutech := make(chan *types.Block, 20)
 	txg.blockExecuteFeed = txg.eth.blockchain.SubscribeExecuteBlocksEvent(blockExecutech)
@@ -427,7 +427,7 @@ func (txg *TxGenAPI) Stop(resPath string) error {
 
 	close(txg.txGenExitCh)
 	txg.start = false
-	//txg.blockfeed.Unsubscribe()
+	txg.blockfeed.Unsubscribe()
 	txg.blockExecuteFeed.Unsubscribe()
 
 	atomic.StoreUint32(&txg.eth.protocolManager.acceptRemoteTxs, 0)
