@@ -745,6 +745,8 @@ func NewTxMakeManger(tx, evm, wasm uint, totalTxPer, activeTxPer, txFrequency, a
 	t.activeSenderTxPer = int(activeTxPer)
 	t.txFrequency = int(txFrequency)
 
+	t.txCache = make(map[common.Hash]*types.Transaction)
+
 	t.blockProduceTime = time.Now()
 
 	rand.Seed(time.Now().UTC().UnixNano()) // always seed random!
