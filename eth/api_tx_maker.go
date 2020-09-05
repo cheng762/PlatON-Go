@@ -147,7 +147,6 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				log.Debug("MakeTx get receipt nonce  exit")
 				return
 			case res := <-blockExcuteCh:
-				txm.blockProduceTime = time.Now()
 				for _, receipt := range res.Transactions() {
 					if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
 						if account.ReceiptsNonce < receipt.Nonce() {
@@ -178,6 +177,32 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 		shouldmake := time.NewTicker(time.Millisecond * time.Duration(txm.txFrequency))
 		for {
 			select {
+			case res := <-blockQCCh:
+				txm.blockProduceTime = time.Now()
+				txLength := len(res.Transactions())
+				var timeUse time.Duration
+
+				current := txm.blockProduceTime.UnixNano()
+				currentLength := 0
+				if txLength > 0 {
+					for _, receipt := range res.Transactions() {
+						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
+							currentLength++
+							if ac, ok := account.SendTime[receipt.Nonce()]; ok {
+								timeUse = timeUse + time.Duration(current-ac.UnixNano())
+								delete(account.SendTime, receipt.Nonce())
+							} else {
+								continue
+							}
+						}
+					}
+					if currentLength > 0 {
+						txg.res.Ttf = append(txg.res.Ttf, Ttf{txm.blockProduceTime, res.Number().Int64(), currentLength, timeUse})
+					}
+					txg.res.Tps = append(txg.res.Tps, Tps{common.MillisToTime(res.Header().Time.Int64()), res.Number().Int64(), txLength})
+				}
+
+				log.Debug("MakeTx receive block", "num", res.Number(), "timeUse", timeUse.Milliseconds(), "txLength", currentLength, "cost", time.Since(txm.blockProduceTime))
 			case <-shouldmake.C:
 				if time.Since(txm.blockProduceTime) >= waitBLockTime {
 					log.Debug("MakeTx should sleep", "time", time.Since(txm.blockProduceTime))
