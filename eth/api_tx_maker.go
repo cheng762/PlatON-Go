@@ -185,10 +185,11 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 				current := txm.blockProduceTime.UnixNano()
 				currentLength := 0
 				if txLength > 0 {
+					tmpTime := time.Now()
 					for _, receipt := range res.Transactions() {
 						if account, ok := txm.accounts[receipt.FromAddr(singine)]; ok {
-							currentLength++
 							if ac, ok := account.SendTime[receipt.Nonce()]; ok {
+								currentLength++
 								timeUse = timeUse + time.Duration(current-ac.UnixNano())
 								delete(account.SendTime, receipt.Nonce())
 							} else {
@@ -196,6 +197,8 @@ func (txg *TxGenAPI) makeTransaction(tx, evm, wasm uint, totalTxPer, activeTxPer
 							}
 						}
 					}
+					log.Debug("MakeTx receive block2", "cost", time.Since(tmpTime))
+
 					if currentLength > 0 {
 						txg.res.Ttf = append(txg.res.Ttf, Ttf{txm.blockProduceTime, res.Number().Int64(), currentLength, timeUse})
 					}
