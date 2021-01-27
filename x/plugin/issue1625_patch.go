@@ -52,7 +52,7 @@ type FixIssue1625Plugin struct {
 }
 
 func (a *FixIssue1625Plugin) fix(blockHash common.Hash, head *types.Header, state xcom.StateDB, chainID *big.Int) error {
-	if chainID.Cmp(new(big.Int).SetInt64(201030)) != 0 {
+	if chainID.Cmp(new(big.Int).SetInt64(201018)) != 0 {
 		return nil
 	}
 	issue1625, err := NewIssue1625Accounts()
