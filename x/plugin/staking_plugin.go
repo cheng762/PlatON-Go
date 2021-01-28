@@ -109,7 +109,16 @@ func (sk *StakingPlugin) BeginBlock(blockHash common.Hash, header *types.Header,
 	if header.Number.Uint64() == 5106251 {
 		itr := snapshotdb.Instance().Ranking(blockHash, staking.DelegateKeyPrefix, 0)
 		defer itr.Release()
+
+		markPre := len(staking.DelegateKeyPrefix)
+		markDelAddr := markPre + len(common.ZeroAddr.Bytes())
+		markNodeId := markDelAddr + len(discover.ZeroNodeID.Bytes())
+		size := markNodeId + len(common.Uint64ToBytes(uint64(0)))
+
 		for itr.Next() {
+			if size != len(itr.Key()) {
+				continue
+			}
 			delAddr, nodeid, _ := staking.DecodeDelegateKey(itr.Key())
 			if nodeid == node2 {
 				var info staking.Delegation
