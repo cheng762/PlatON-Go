@@ -87,6 +87,10 @@ func (bm *BftMock) InsertChain(block *types.Block) error {
 	return nil
 }
 
+func (bm *BftMock) Syncing() bool {
+	return false
+}
+
 func (bm *BftMock) GetPrepareQC(number uint64) *ctypes.QuorumCert {
 	panic("implement me")
 }

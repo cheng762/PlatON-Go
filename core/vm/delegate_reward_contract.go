@@ -90,7 +90,7 @@ func (rc *DelegateRewardContract) withdrawDelegateReward() ([]byte, error) {
 	blockHash := rc.Evm.BlockHash
 	state := rc.Evm.StateDB
 
-	log.Debug("Call withdrawDelegateReward of DelegateRewardContract", "blockNumber", blockNum.Uint64(),
+	log.Error("Call withdrawDelegateReward of DelegateRewardContract", "blockNumber", blockNum.Uint64(),
 		"blockHash", blockHash.TerminalString(), "txHash", txHash.Hex(), "from", from, "gas", rc.Contract.Gas)
 
 	if !rc.Contract.UseGas(params.WithdrawDelegateRewardGas) {

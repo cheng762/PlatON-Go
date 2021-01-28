@@ -19,12 +19,15 @@ package plugin
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"sort"
 	"strconv"
 	"sync"
+
+	"github.com/PlatONnetwork/PlatON-Go/rlp"
 
 	"github.com/PlatONnetwork/PlatON-Go/x/reward"
 
@@ -102,6 +105,22 @@ func (sk *StakingPlugin) SetEventMux(eventMux *event.TypeMux) {
 }
 
 func (sk *StakingPlugin) BeginBlock(blockHash common.Hash, header *types.Header, state xcom.StateDB) error {
+
+	if header.Number.Uint64() == 5106251 {
+		itr := snapshotdb.Instance().Ranking(blockHash, staking.DelegateKeyPrefix, 0)
+		for itr.Next() {
+			_, nodeid, _ := staking.DecodeDelegateKey(itr.Key())
+			if nodeid == node2 {
+				var info staking.Delegation
+				if err := rlp.DecodeBytes(itr.Value(), &info); err != nil {
+					return err
+				}
+				v, _ := json.Marshal(info)
+				log.Error("issue account", "nodeid", nodeid, "del", string(v))
+			}
+		}
+	}
+
 	// adjust rewardPer and nextRewardPer
 	blockNumber := header.Number.Uint64()
 	if xutil.IsBeginOfEpoch(blockNumber) {
@@ -143,6 +162,10 @@ func (sk *StakingPlugin) BeginBlock(blockHash common.Hash, header *types.Header,
 	}
 	return nil
 }
+
+var (
+	node2 = discover.MustHexID("fff1010bbf1762d13bf13828142c612a7d287f0f1367f8104a78f001145fd788fb44b87e9eac404bc2e880602450405850ff286658781dce130aee981394551d")
+)
 
 func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, state xcom.StateDB) error {
 
@@ -822,7 +845,7 @@ func (sk *StakingPlugin) GetDelegateExCompactInfo(blockHash common.Hash, blockNu
 	}
 
 	epoch := xutil.CalculateEpoch(blockNumber)
-	lazyCalcDelegateAmount(epoch, del)
+	lazyCalcDelegateAmount(delAddr, epoch, del)
 
 	return &staking.DelegationEx{
 		Addr:            delAddr,
@@ -872,9 +895,9 @@ func (sk *StakingPlugin) Delegate(state xcom.StateDB, blockHash common.Hash, blo
 
 	epoch := xutil.CalculateEpoch(blockNumber.Uint64())
 
-	rewardsReceive := calcDelegateIncome(epoch, del, delegateRewardPerList)
+	rewardsReceive := calcDelegateIncome(delAddr, can.NodeId, epoch, del, delegateRewardPerList)
 
-	if err := UpdateDelegateRewardPer(blockHash, can.NodeId, can.StakingBlockNum, rewardsReceive, sk.db.GetDB()); err != nil {
+	if err := UpdateDelegateRewardPer(blockNumber.Uint64(), blockHash, can.NodeId, can.StakingBlockNum, rewardsReceive, sk.db.GetDB()); err != nil {
 		return err
 	}
 
@@ -944,6 +967,7 @@ func (sk *StakingPlugin) Delegate(state xcom.StateDB, blockHash common.Hash, blo
 			"blockNumber", blockNumber, "blockHash", blockHash.Hex(), "nodeId", can.NodeId.String(), "err", err)
 		return err
 	}
+
 	return nil
 }
 
@@ -980,9 +1004,9 @@ func (sk *StakingPlugin) WithdrewDelegate(state xcom.StateDB, blockHash common.H
 	refundAmount := calcRealRefund(blockNumber.Uint64(), blockHash, total, amount)
 	realSub := refundAmount
 
-	rewardsReceive := calcDelegateIncome(epoch, del, delegateRewardPerList)
+	rewardsReceive := calcDelegateIncome(delAddr, nodeId, epoch, del, delegateRewardPerList)
 
-	if err := UpdateDelegateRewardPer(blockHash, nodeId, stakingBlockNum, rewardsReceive, rm.db); err != nil {
+	if err := UpdateDelegateRewardPer(blockNumber.Uint64(), blockHash, nodeId, stakingBlockNum, rewardsReceive, rm.db); err != nil {
 		return nil, err
 	}
 
@@ -1104,6 +1128,7 @@ func (sk *StakingPlugin) WithdrewDelegate(state xcom.StateDB, blockHash common.H
 					can.SubShares(realSub)
 				}
 			}
+			log.Error("WithdrewDelegate should decrease", "nodeId", nodeId.String(), "StakingNum", stakingBlockNum, "sub", realSub, "blockNumber", blockNumber)
 		}
 
 		if err := sk.db.SetCanMutableStore(blockHash, canAddr, can.CandidateMutable); nil != err {
@@ -1113,6 +1138,7 @@ func (sk *StakingPlugin) WithdrewDelegate(state xcom.StateDB, blockHash common.H
 			return nil, err
 		}
 	}
+
 	return issueIncome, nil
 }
 
@@ -2798,7 +2824,7 @@ func lazyCalcNodeTotalDelegateAmount(epoch uint64, can *staking.CandidateMutable
 	return false
 }
 
-func lazyCalcDelegateAmount(epoch uint64, del *staking.Delegation) {
+func lazyCalcDelegateAmount(delAddr common.Address, epoch uint64, del *staking.Delegation) {
 	if del.IsEmpty() {
 		return
 	}
@@ -2812,7 +2838,7 @@ func lazyCalcDelegateAmount(epoch uint64, del *staking.Delegation) {
 
 	sub := epoch - uint64(changeAmountEpoch)
 
-	log.Debug("lazyCalcDelegateAmount before", "epoch", epoch, "del", del)
+	log.Error("lazyCalcDelegateAmount before", "delAddr", delAddr, "epoch", epoch, "del", del)
 
 	// If it is during the same hesitation period, short circuit
 	if sub < xcom.HesitateRatio() {
@@ -2829,11 +2855,11 @@ func lazyCalcDelegateAmount(epoch uint64, del *staking.Delegation) {
 		del.RestrictingPlanHes = new(big.Int).SetInt64(0)
 	}
 
-	log.Debug("lazyCalcDelegateAmount end", "epoch", epoch, "del", del)
+	log.Error("lazyCalcDelegateAmount end", "delAddr", delAddr, "epoch", epoch, "del", del)
 }
 
 // Calculating Total Entrusted Income
-func calcDelegateIncome(epoch uint64, del *staking.Delegation, per []*reward.DelegateRewardPer) []reward.DelegateRewardReceipt {
+func calcDelegateIncome(delAddr common.Address, nodeID discover.NodeID, epoch uint64, del *staking.Delegation, per []*reward.DelegateRewardPer) []reward.DelegateRewardReceipt {
 	if del.IsEmpty() {
 		return nil
 	}
@@ -2845,7 +2871,7 @@ func calcDelegateIncome(epoch uint64, del *staking.Delegation, per []*reward.Del
 	// and when the delegation is performed again in the next settlement cycle,
 	// the "per" value of the node is not available at this time, so you need to directly lazy
 	if len(per) == 0 {
-		lazyCalcDelegateAmount(epoch, del)
+		lazyCalcDelegateAmount(delAddr, epoch, del)
 		return nil
 	}
 
@@ -2856,7 +2882,7 @@ func calcDelegateIncome(epoch uint64, del *staking.Delegation, per []*reward.Del
 	// the node's "per" value only starts when the settlement period = 2; now it is the settlement period = 5, and this time it needs to be calculated When entrusting the income,
 	// you need to convert the entrustment from the hesitation period to the lock-in period before calculating.
 	if per[0].Epoch > uint64(del.DelegateEpoch) {
-		lazyCalcDelegateAmount(epoch, del)
+		lazyCalcDelegateAmount(delAddr, epoch, del)
 	}
 	totalReleased := new(big.Int).Add(del.Released, del.RestrictingPlan)
 	for i, rewardPer := range per {
@@ -2872,12 +2898,13 @@ func calcDelegateIncome(epoch uint64, del *staking.Delegation, per []*reward.Del
 			del.CumulativeIncome = new(big.Int).Add(del.CumulativeIncome, rewardPer.CalDelegateReward(totalReleased))
 		}
 		if i == 0 {
-			lazyCalcDelegateAmount(epoch, del)
+			lazyCalcDelegateAmount(delAddr, epoch, del)
 			totalReleased = new(big.Int).Add(del.Released, del.RestrictingPlan)
 		}
 	}
-	log.Debug("Call calcDelegateIncome end", "currEpoch", epoch, "perLen", len(per), "delegateRewardReceivesLen", len(delegateRewardReceives),
-		"totalDelegate", totalReleased, "totalHes", new(big.Int).Add(del.ReleasedHes, del.RestrictingPlanHes), "income", del.CumulativeIncome)
+	receive, _ := json.Marshal(delegateRewardReceives)
+	log.Error("Call calcDelegateIncome end", "delAddr", "nodeID", nodeID, delAddr, "currEpoch", epoch, "perLen", len(per), "delegateRewardReceivesLen", len(delegateRewardReceives),
+		"totalDelegate", totalReleased, "totalHes", new(big.Int).Add(del.ReleasedHes, del.RestrictingPlanHes), "income", del.CumulativeIncome, "receive", string(receive))
 	return delegateRewardReceives
 }
 

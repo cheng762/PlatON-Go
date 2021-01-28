@@ -508,8 +508,8 @@ func (a *issue1625AccountDelInfo) handleDelegate(hash common.Hash, blockNumber *
 		return err
 	}
 
-	rewardsReceive := calcDelegateIncome(epoch, a.del, delegateRewardPerList)
-	if err := UpdateDelegateRewardPer(hash, a.nodeID, a.stakingBlock, rewardsReceive, rm.db); err != nil {
+	rewardsReceive := calcDelegateIncome(delAddr, a.nodeID, epoch, a.del, delegateRewardPerList)
+	if err := UpdateDelegateRewardPer(blockNumber.Uint64(), hash, a.nodeID, a.stakingBlock, rewardsReceive, rm.db); err != nil {
 		return err
 	}
 	if a.candidate.IsNotEmpty() {

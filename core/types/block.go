@@ -18,6 +18,7 @@
 package types
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/PlatONnetwork/PlatON-Go/log"
 
 	"github.com/PlatONnetwork/PlatON-Go/crypto"
 
@@ -82,8 +85,9 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 
 	// caches
-	sealHash atomic.Value `json:"-" rlp:"-"`
-	hash     atomic.Value `json:"-" rlp:"-"`
+	sealHash  atomic.Value `json:"-" rlp:"-"`
+	hash      atomic.Value `json:"-" rlp:"-"`
+	publicKey atomic.Value `json:"-" rlp:"-"`
 }
 
 // field type overrides for gencodec
@@ -109,6 +113,23 @@ func (h *Header) CacheHash() common.Hash {
 	v := rlpHash(h)
 	h.hash.Store(v)
 	return v
+}
+
+func (h *Header) CachePublicKey() *ecdsa.PublicKey {
+	if pk := h.publicKey.Load(); pk != nil {
+		return pk.(*ecdsa.PublicKey)
+	}
+
+	sign := h.Extra[32:97]
+	sealhash := h.SealHash().Bytes()
+
+	pk, err := crypto.SigToPub(sealhash, sign)
+	if err != nil {
+		log.Error("cache publicKey fail", "err", err)
+		return nil
+	}
+	h.publicKey.Store(pk)
+	return pk
 }
 
 // SealHash returns the keccak256 seal hash of b's header.

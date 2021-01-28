@@ -647,7 +647,7 @@ func (stkc *StakingContract) delegate(typ uint16, nodeId discover.NodeID, amount
 	from := stkc.Contract.CallerAddress
 	state := stkc.Evm.StateDB
 
-	log.Debug("Call delegate of stakingContract", "txHash", txHash.Hex(),
+	log.Error("Call delegate of stakingContract", "txHash", txHash.Hex(),
 		"blockNumber", blockNumber.Uint64(), "delAddr", from, "typ", typ,
 		"nodeId", nodeId.String(), "amount", amount)
 
@@ -775,7 +775,7 @@ func (stkc *StakingContract) withdrewDelegate(stakingBlockNum uint64, nodeId dis
 	from := stkc.Contract.CallerAddress
 	state := stkc.Evm.StateDB
 
-	log.Debug("Call withdrewDelegate of stakingContract", "txHash", txHash.Hex(),
+	log.Error("Call withdrewDelegate of stakingContract", "txHash", txHash.Hex(),
 		"blockNumber", blockNumber.Uint64(), "delAddr", from, "nodeId", nodeId.String(),
 		"stakingNum", stakingBlockNum, "amount", amount)
 

@@ -47,7 +47,7 @@ const (
 	JournalRemain             = 200
 	UnBlockNeedClean          = 200
 	MaxBlockCompaction        = 10
-	MaxBlockCompactionSync    = 100
+	MaxBlockCompactionSync    = 10
 	MaxBlockTriggerCompaction = 200
 )
 
@@ -465,7 +465,7 @@ func (s *snapshotDB) findToWrite() int {
 		commitNum int
 	)
 	if len(s.committed) > MaxBlockTriggerCompaction {
-		commitNum = MaxBlockCompactionSync
+		commitNum = len(s.committed) - MaxBlockCompactionSync
 		return commitNum
 	} else {
 		for i := 0; i < len(s.committed); i++ {

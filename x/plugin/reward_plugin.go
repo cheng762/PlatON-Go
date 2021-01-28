@@ -18,12 +18,14 @@ package plugin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/x/gov"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
+
+	"github.com/PlatONnetwork/PlatON-Go/x/gov"
 
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 
@@ -295,14 +297,14 @@ func (rmp *RewardMgrPlugin) WithdrawDelegateReward(blockHash common.Hash, blockN
 	currentEpoch := xutil.CalculateEpoch(blockNum)
 	receiveReward := new(big.Int)
 	for _, delWithPer := range list {
-		rewardsReceive := calcDelegateIncome(currentEpoch, delWithPer.DelegationInfo.Delegation, delWithPer.RewardPerList)
+		rewardsReceive := calcDelegateIncome(account, delWithPer.DelegationInfo.NodeID, currentEpoch, delWithPer.DelegationInfo.Delegation, delWithPer.RewardPerList)
 		rewards = append(rewards, reward.NodeDelegateReward{
 			NodeID:     delWithPer.DelegationInfo.NodeID,
 			StakingNum: delWithPer.DelegationInfo.StakeBlockNumber,
 			Reward:     new(big.Int).Set(delWithPer.DelegationInfo.Delegation.CumulativeIncome),
 		})
 		if len(rewardsReceive) != 0 {
-			if err := UpdateDelegateRewardPer(blockHash, delWithPer.DelegationInfo.NodeID, delWithPer.DelegationInfo.StakeBlockNumber, rewardsReceive, rmp.db); err != nil {
+			if err := UpdateDelegateRewardPer(blockNum, blockHash, delWithPer.DelegationInfo.NodeID, delWithPer.DelegationInfo.StakeBlockNumber, rewardsReceive, rmp.db); err != nil {
 				log.Error("call WithdrawDelegateReward UpdateDelegateRewardPer fail", "err", err)
 				return nil, err
 			}
@@ -376,7 +378,7 @@ func (rmp *RewardMgrPlugin) GetDelegateReward(blockHash common.Hash, blockNum ui
 	rewards := make([]reward.NodeDelegateRewardPresenter, 0)
 
 	for _, delWithPer := range delegationInfoWithRewardPerList {
-		calcDelegateIncome(currentEpoch, delWithPer.DelegationInfo.Delegation, delWithPer.RewardPerList)
+		calcDelegateIncome(account, delWithPer.DelegationInfo.NodeID, currentEpoch, delWithPer.DelegationInfo.Delegation, delWithPer.RewardPerList)
 
 		rewards = append(rewards, reward.NodeDelegateRewardPresenter{
 			NodeID:     delWithPer.DelegationInfo.NodeID,
@@ -428,11 +430,9 @@ func (rmp *RewardMgrPlugin) getBlockMinderAddress(blockHash common.Hash, head *t
 	if blockHash == common.ZeroHash {
 		return rmp.nodeID, rmp.nodeADD, nil
 	}
-	sign := head.Extra[32:97]
-	sealhash := head.SealHash().Bytes()
-	pk, err := crypto.SigToPub(sealhash, sign)
-	if err != nil {
-		return discover.ZeroNodeID, common.ZeroNodeAddr, err
+	pk := head.CachePublicKey()
+	if pk == nil {
+		return discover.ZeroNodeID, common.ZeroNodeAddr, errors.New("get publicKey fail")
 	}
 	return discover.PubkeyID(pk), crypto.PubkeyToNodeAddress(*pk), nil
 }
@@ -550,11 +550,12 @@ func AppendDelegateRewardPer(blockHash common.Hash, nodeID discover.NodeID, stak
 	if err := db.Put(blockHash, key, v); err != nil {
 		return err
 	}
-	log.Debug("append delegate rewardPer", "nodeID", nodeID.TerminalString(), "stkNum", stakingNum, "per", per)
+	log.Error("append delegate rewardPer", "nodeID", nodeID.TerminalString(), "stkNum", stakingNum, "per", per)
+
 	return nil
 }
 
-func UpdateDelegateRewardPer(blockHash common.Hash, nodeID discover.NodeID, stakingNum uint64, receives []reward.DelegateRewardReceipt, db snapshotdb.DB) error {
+func UpdateDelegateRewardPer(blockNum uint64, blockHash common.Hash, nodeID discover.NodeID, stakingNum uint64, receives []reward.DelegateRewardReceipt, db snapshotdb.DB) error {
 	if len(receives) == 0 {
 		return nil
 	}
@@ -578,7 +579,7 @@ func UpdateDelegateRewardPer(blockHash common.Hash, nodeID discover.NodeID, stak
 			reIndex += list.DecreaseTotalAmount(receives[reIndex : reIndex+reward.DelegateRewardPerLength])
 		}
 		if list.IsChange() {
-			log.Debug("update delegate reward per list", "nodeID", nodeID.TerminalString(), "stkNum", stakingNum, "list", list)
+			log.Error("update delegate reward per list", "nodeID", nodeID.TerminalString(), "stkNum", stakingNum, "blockNum", blockNum, "list", list)
 			if list.ShouldDel() {
 				if err := db.Del(blockHash, key); err != nil {
 					return err
