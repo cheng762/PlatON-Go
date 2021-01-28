@@ -108,17 +108,19 @@ func (sk *StakingPlugin) BeginBlock(blockHash common.Hash, header *types.Header,
 
 	if header.Number.Uint64() == 5106251 {
 		itr := snapshotdb.Instance().Ranking(blockHash, staking.DelegateKeyPrefix, 0)
+		defer itr.Release()
 		for itr.Next() {
-			_, nodeid, _ := staking.DecodeDelegateKey(itr.Key())
+			delAddr, nodeid, _ := staking.DecodeDelegateKey(itr.Key())
 			if nodeid == node2 {
 				var info staking.Delegation
 				if err := rlp.DecodeBytes(itr.Value(), &info); err != nil {
 					return err
 				}
 				v, _ := json.Marshal(info)
-				log.Error("issue account", "nodeid", nodeid, "del", string(v))
+				log.Error("issue account", "nodeid", nodeid, "delAddr", delAddr, "del", string(v))
 			}
 		}
+		return errors.New("must error")
 	}
 
 	// adjust rewardPer and nextRewardPer
