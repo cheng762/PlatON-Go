@@ -1117,6 +1117,8 @@ func (sk *StakingPlugin) WithdrewDelegate(state xcom.StateDB, blockHash common.H
 				if can.Shares != nil && can.Shares.Cmp(realSub) > 0 {
 					can.SubShares(realSub)
 				}
+			} else {
+				log.Error("set can power fail", "delAddr", delAddr, "can", nodeId, "stakingBlockNum", stakingBlockNum, "realSub", realSub)
 			}
 		}
 
