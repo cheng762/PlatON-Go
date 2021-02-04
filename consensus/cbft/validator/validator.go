@@ -558,10 +558,13 @@ func (vp *ValidatorPool) Validators(epoch uint64) *cbfttypes.Validators {
 
 // VerifyHeader verify block's header.
 func (vp *ValidatorPool) VerifyHeader(header *types.Header) error {
-	_, err := crypto.Ecrecover(header.SealHash().Bytes(), header.Signature())
+	if header.CachePublicKey() == nil {
+		return errors.New("failed to verify header")
+	}
+	/*_, err := crypto.Ecrecover(header.SealHash().Bytes(), header.Signature())
 	if err != nil {
 		return err
-	}
+	}*/
 	// todo: need confirmed.
 	return vp.agency.VerifyHeader(header, nil)
 }

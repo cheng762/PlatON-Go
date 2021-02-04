@@ -971,8 +971,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			nodes, _ := triedb.Size()
 			oversize = nodes > limit
 		} else {
-			triedb.ReferenceVersion(root)
-			triedb.DereferenceDB(currentBlock.Root())
+			//	triedb.ReferenceVersion(root)
+			//	triedb.DereferenceDB(currentBlock.Root())
 
 			if err := triedb.Commit(root, false, false); err != nil {
 				log.Error("Commit to triedb error", "root", root)
@@ -1163,7 +1163,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	seals := make([]bool, len(chain))
 
 	for i, block := range chain {
-		headers[i] = block.Header()
+		headers[i] = block.Header2()
 		seals[i] = true
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
