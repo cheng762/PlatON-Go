@@ -414,6 +414,8 @@ func (d *Downloader) synchronise(id string, hash common.Hash, bn *big.Int, mode 
 	if p == nil {
 		return errUnknownPeer
 	}
+	d.snapshotDB.Synchronising()
+	defer d.snapshotDB.StopSynchronising()
 	return d.syncWithPeer(p, hash, bn)
 }
 

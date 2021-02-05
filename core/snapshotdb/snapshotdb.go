@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/PlatONnetwork/PlatON-Go/metrics"
 
@@ -101,6 +102,9 @@ type DB interface {
 	//ues to Revert failed tx
 	RevertToSnapshot(hash common.Hash, revid int)
 	Snapshot(hash common.Hash) int
+
+	Synchronising()
+	StopSynchronising()
 }
 
 type BaseDB interface {
@@ -157,6 +161,8 @@ type snapshotDB struct {
 	closed bool
 
 	dbError error
+
+	synchronising int32
 }
 
 type Chain interface {
@@ -754,6 +760,14 @@ func (s *snapshotDB) Commit(hash common.Hash) error {
 		}
 	}
 
+	if atomic.LoadInt32(&s.synchronising) > 0 {
+		if len(s.committed) > 30 {
+			if err := s.Compaction(); err != nil {
+				return err
+			}
+		}
+	}
+
 	block.readOnly = true
 	s.writeBlockToWalAsynchronous(block)
 
@@ -768,6 +782,14 @@ func (s *snapshotDB) Commit(hash common.Hash) error {
 	s.unCommit.Unlock()
 	logger.Info("commit block", "num", block.Number, "hash", hash.String())
 	return nil
+}
+
+func (s *snapshotDB) Synchronising() {
+	atomic.CompareAndSwapInt32(&s.synchronising, 0, 1)
+}
+
+func (s *snapshotDB) StopSynchronising() {
+	atomic.StoreInt32(&s.synchronising, 0)
 }
 
 func (s *snapshotDB) BaseNum() (*big.Int, error) {
