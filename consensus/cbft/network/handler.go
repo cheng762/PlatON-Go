@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package network
 
 import (
@@ -223,10 +222,10 @@ func (h *EngineManager) PartBroadcast(msg types.Message) {
 // whether forwarding is required according to the message type.
 //
 // Note:
-// 1. message type that need to be forwarded:
-//    PrepareBlockMsg/PrepareVoteMsg/ViewChangeMsg/BlockQuorumCertMsg
-// 2. message type that need not to be forwarded:
-//    (Except for the above types, the rest are not forwarded).
+//  1. message type that need to be forwarded:
+//     PrepareBlockMsg/PrepareVoteMsg/ViewChangeMsg/BlockQuorumCertMsg
+//  2. message type that need not to be forwarded:
+//     (Except for the above types, the rest are not forwarded).
 func (h *EngineManager) Forwarding(nodeID string, msg types.Message) error {
 	msgHash := msg.MsgHash()
 	msgType := protocols.MessageType(msg)
@@ -705,6 +704,9 @@ func (h *EngineManager) synchronize() {
 	for {
 		select {
 		case <-voteTicker.C:
+			if h.engine.Syncing() {
+				continue
+			}
 			msg, err := h.engine.MissingPrepareVote()
 			if err != nil {
 				log.Debug("Request missing prepareVote failed", "err", err)
@@ -715,6 +717,9 @@ func (h *EngineManager) synchronize() {
 			h.PartBroadcast(msg)
 
 		case <-blockNumberTimer.C:
+			if h.engine.Syncing() {
+				continue
+			}
 			// Sent at random.
 			syncQCBnFunc()
 			rd := rand.Intn(5)
@@ -725,6 +730,9 @@ func (h *EngineManager) synchronize() {
 			blockNumberTimer.Reset(resetTime)
 
 		case <-viewTicker.C:
+			if h.engine.Syncing() {
+				continue
+			}
 			// If the local viewChange has insufficient votes,
 			// the GetViewChange message is sent from the missing node.
 			msg, err := h.engine.MissingViewChangeNodes()

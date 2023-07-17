@@ -146,7 +146,7 @@ func (b *baseBridge) UpdateChainState(qcState, lockState, commitState *protocols
 // newChainState tries to update consensus state to wal
 // Need to do continuous block check before writing.
 func (b *baseBridge) newChainState(commit *protocols.State, lock *protocols.State, qc *protocols.State) error {
-	log.Debug("New chainState", "commitState", commit.String(), "lockState", lock.String(), "qcState", qc.String())
+	//log.Debug("New chainState", "commitState", commit.String(), "lockState", lock.String(), "qcState", qc.String())
 	if !commit.ValidState() || !lock.ValidState() || !qc.ValidState() {
 		return errNonContiguous
 	}

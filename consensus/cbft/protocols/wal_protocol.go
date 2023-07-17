@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package protocols
 
 import (
@@ -57,7 +56,7 @@ func (s *State) String() string {
 		return ""
 	}
 	return fmt.Sprintf("[blockNumber:%d, blockHash:%s, qcNumber:%d, qcHash:%s]",
-		s.Block.NumberU64(), s.Block.Hash().String(), s.QuorumCert.BlockNumber, s.QuorumCert.BlockHash.String())
+		s.Block.NumberU64(), s.Block.Hash(), s.QuorumCert.BlockNumber, s.QuorumCert.BlockHash)
 }
 
 // ChainState indicates the latest consensus state.

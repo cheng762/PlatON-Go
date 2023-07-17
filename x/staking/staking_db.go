@@ -17,8 +17,8 @@
 package staking
 
 import (
+	"bytes"
 	"fmt"
-
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 
 	"github.com/PlatONnetwork/PlatON-Go/common"
@@ -27,7 +27,9 @@ import (
 )
 
 type StakingDB struct {
-	db snapshotdb.DB
+	db    snapshotdb.DB
+	cache ValidatorQueue
+	cur   []byte
 }
 
 func NewStakingDB() *StakingDB {
@@ -477,10 +479,16 @@ func (db *StakingDB) GetEpochValListByBlockHash(blockHash common.Hash, start, en
 		return nil, err
 	}
 
+	if bytes.Equal(arrByte, db.cur) {
+		return db.cache, nil
+	}
+
 	var arr ValidatorQueue
 	if err := rlp.DecodeBytes(arrByte, &arr); nil != err {
 		return nil, err
 	}
+	db.cur = arrByte
+	db.cache = arr
 	return arr, nil
 }
 

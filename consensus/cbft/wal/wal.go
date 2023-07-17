@@ -205,7 +205,7 @@ func (wal *baseWal) UpdateChainState(chainState *protocols.ChainState) error {
 		return err
 	}
 	wal.cachedChainState.Store(chainState)
-	log.Debug("Success to update chainState")
+	//log.Debug("Success to update chainState")
 	return nil
 }
 

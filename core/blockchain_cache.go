@@ -190,9 +190,9 @@ func (bcc *BlockChainCache) clearReceipts(sealHash common.Hash) {
 	defer bcc.receiptsMu.Unlock()
 
 	//var blockNum uint64
-	if obj, exist := bcc.receiptsCache[sealHash]; exist {
+	if _, exist := bcc.receiptsCache[sealHash]; exist {
 		//blockNum = obj.blockNum
-		log.Debug("Clear Receipts", "sealHash", sealHash, "number", obj.blockNum)
+		//log.Debug("Clear Receipts", "sealHash", sealHash, "number", obj.blockNum)
 		delete(bcc.receiptsCache, sealHash)
 	}
 	//for hash, obj := range bcc.receiptsCache {
@@ -209,7 +209,7 @@ func (bcc *BlockChainCache) clearStateDB(sealHash common.Hash) {
 
 	if obj, exist := bcc.stateDBCache[sealHash]; exist {
 		obj.stateDB.ClearReference()
-		log.Debug("Clear StateDB", "sealHash", sealHash, "number", obj.blockNum)
+		//log.Debug("Clear StateDB", "sealHash", sealHash, "number", obj.blockNum)
 		delete(bcc.stateDBCache, sealHash)
 		//delete(pbc.stateDBCache, sealHash)
 	}
@@ -266,7 +266,7 @@ func (bcc *BlockChainCache) ClearCache(block *types.Block) {
 	})
 	sort.Sort(sh)
 	for _, s := range sh {
-		log.Debug("Clear Cache block", "sealHash", s.hash, "number", s.number)
+		//log.Debug("Clear Cache block", "sealHash", s.hash, "number", s.number)
 		bcc.clearReceipts(s.hash)
 		bcc.clearStateDB(s.hash)
 		bcc.executed.Delete(s.hash)

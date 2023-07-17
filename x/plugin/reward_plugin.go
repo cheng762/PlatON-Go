@@ -478,7 +478,7 @@ func (rmp *RewardMgrPlugin) AllocatePackageBlock(blockHash common.Hash, head *ty
 	if head.Coinbase != vm.RewardManagerPoolAddr {
 
 		log.Debug("allocate package reward,block reward", "blockNumber", head.Number, "blockHash", blockHash,
-			"coinBase", head.Coinbase.String(), "reward", reward)
+			"coinBase", head.Coinbase, "reward", reward)
 
 		state.SubBalance(vm.RewardManagerPoolAddr, reward)
 		state.AddBalance(head.Coinbase, reward)

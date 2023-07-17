@@ -641,7 +641,7 @@ func (s *StateDB) ClearReference() {
 			fn()
 		}
 	}
-	log.Trace("clear all ref", "reflen", len(s.clearReferenceFunc))
+	//log.Trace("clear all ref", "reflen", len(s.clearReferenceFunc))
 	if s.parent != nil {
 		if len(s.parent.clearReferenceFunc) > 0 {
 			panic("parent ref > 0")
@@ -917,7 +917,7 @@ func (s *StateDB) clearParentRef() {
 
 	if s.parent != nil {
 		s.parentCommitted = true
-		log.Trace("clearParentRef", "parent root", s.parent.Root().String())
+		//log.Trace("clearParentRef", "parent root", s.parent.Root().String())
 		// Parent is nil, find the parent state based on current StateDB
 		s.parent = nil
 	}

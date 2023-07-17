@@ -428,12 +428,13 @@ func (cbft *Cbft) statMessage(msg *ctypes.MsgInfo) error {
 // ReceiveSyncMsg is used to receive messages that are synchronized from other nodes.
 //
 // Possible message types are:
-//  PrepareBlockVotesMsg/GetLatestStatusMsg/LatestStatusMsg/
+//
+//	PrepareBlockVotesMsg/GetLatestStatusMsg/LatestStatusMsg/
 func (cbft *Cbft) ReceiveSyncMsg(msg *ctypes.MsgInfo) error {
 	// If the node is synchronizing the block, discard sync msg directly and do not count the msg
 	// When the syncMsgCh channel is congested, it is easy to cause a message backlog
 	if utils.True(&cbft.syncing) {
-		cbft.log.Debug("Currently syncing, consensus message pause, discard sync msg")
+		//cbft.log.Debug("Currently syncing, consensus message pause, discard sync msg")
 		return nil
 	}
 
